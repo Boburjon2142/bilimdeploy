@@ -20,11 +20,11 @@
                     <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
                         <form method="post" action="{% url 'update_cart' item.book.id %}" class="d-flex align-items-center gap-2">
                             {% csrf_token %}
-                            <input type="number" name="quantity" value="{{ item.quantity }}" min="1" class="form-control text-center" style="width:70px;" onchange="this.form.submit()">
+                            <input type="number" name="quantity" value="{{ item.quantity }}" min="1" class="form-control text-center qty-input" onchange="this.form.submit()">
                         </form>
                         <form method="post" action="{% url 'remove_from_cart' item.book.id %}">
                             {% csrf_token %}
-                            <button class="btn btn-outline-danger btn-sm d-flex align-items-center justify-content-center" style="width:38px;height:38px;" aria-label="O‘chirish">
+                            <button class="btn btn-outline-danger btn-icon" aria-label="O‘chirish">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </form>

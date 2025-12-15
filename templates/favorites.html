@@ -2,11 +2,17 @@
 {% load humanize %}
 {% block content %}
 <div class="px-3 py-3">
+    <style>
+      .fav-badge { background:#1E2A38; border-radius:10px; padding:6px 10px; color:#fff; font-weight:700; }
+      .fav-card { border-radius:16px; border:1px solid #e4e9f1; box-shadow:0 12px 28px rgba(30,42,56,0.08); }
+      .fav-img { width:88px; height:120px; object-fit:cover; border-radius:12px; }
+      .fav-actions .btn { height:36px; border-radius:10px; display:inline-flex; align-items:center; gap:6px; }
+    </style>
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h4 class="fw-bold mb-0">Sevimlilar</h4>
         {% with fav_count=request.session.favorites|length %}
         {% if fav_count %}
-        <span class="badge bg-dark px-3 py-2">{{ fav_count }}</span>
+        <span class="fav-badge">{{ fav_count }}</span>
         {% endif %}
         {% endwith %}
     </div>
@@ -14,30 +20,30 @@
     {% if books %}
     <div class="d-flex flex-column gap-3">
         {% for book in books %}
-        <div class="card border-0 shadow-sm" style="border-radius: 14px;">
+        <div class="card border-0 fav-card">
             <div class="card-body d-flex gap-3 align-items-start flex-wrap">
                 {% if book.cover_image %}
-                <img src="{{ book.cover_image.url }}" style="width:80px;height:110px;object-fit:cover;border-radius:10px;" alt="{{ book.title }}">
+                <img src="{{ book.cover_image.url }}" class="fav-img" alt="{{ book.title }}">
                 {% else %}
-                <img src="https://via.placeholder.com/80x110?text=Rasm+yo%27q" style="width:80px;height:110px;object-fit:cover;border-radius:10px;" alt="{{ book.title }}">
+                <img src="https://via.placeholder.com/88x120?text=Rasm+yo%27q" class="fav-img" alt="{{ book.title }}">
                 {% endif %}
                 <div class="flex-grow-1 d-flex flex-column gap-1">
                     <div class="fw-semibold" style="font-size: 15px;">{{ book.title }}</div>
                     <div class="text-muted" style="font-size: 12px;">{{ book.author.name }}</div>
                     <div class="fw-bold mt-1">{{ book.sale_price|intcomma }} so‘m</div>
-                    <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                    <div class="fav-actions d-flex flex-wrap align-items-center gap-2 mt-2">
                         <a href="{{ book.get_absolute_url }}" class="btn btn-outline-secondary btn-sm">Ko‘rish</a>
                         <form method="post" action="{% url 'add_to_cart' book.id %}">
                             {% csrf_token %}
                             <input type="hidden" name="quantity" value="1">
-                            <button class="btn btn-primary btn-sm d-flex align-items-center gap-1" type="submit">
+                            <button class="btn btn-primary btn-sm" type="submit">
                                 <i class="bi bi-cart-plus"></i><span>Savatga</span>
                             </button>
                         </form>
                         <form method="post" action="{% url 'remove_favorite' book.id %}">
                             {% csrf_token %}
-                            <button class="btn btn-link text-danger p-0 d-flex align-items-center gap-1" type="submit">
-                                <i class="bi bi-trash"></i><span>O‘chirish</span>
+                            <button class="btn btn-outline-danger btn-sm btn-icon" type="submit">
+                                <i class="bi bi-trash"></i>
                             </button>
                         </form>
                     </div>
