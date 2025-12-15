@@ -28,7 +28,7 @@
                 {% csrf_token %}
                 <div class="d-flex align-items-center gap-2">
                     <button class="qty-btn" type="button" onclick="changeQty(-1)">-</button>
-                    <input type="number" id="qty" name="quantity" class="form-control text-center" style="width:80px;" value="1" min="1">
+                    <input type="number" id="qty" name="quantity" class="form-control text-center qty-input" value="1" min="1">
                     <button class="qty-btn" type="button" onclick="changeQty(1)">+</button>
                 </div>
                 <button class="btn btn-primary flex-grow-1" type="submit">Savatchaga qo‘shish</button>
