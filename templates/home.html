@@ -10,10 +10,10 @@
                     <div class="carousel-item {% if forloop.first %}active{% endif %}">
                         {% if banner.link %}
                         <a href="{{ banner.link }}" target="_blank">
-                            <img class="hero-img" src="{{ banner.image.url }}" alt="{{ banner.title|default:'Banner' }}">
+                            {% if banner.image %}<img class="hero-img" src="{{ banner.image.url }}" alt="{{ banner.title|default:'Banner' }}">{% else %}<img class="hero-img" src="https://via.placeholder.com/1100x420/0f172a/ffffff?text=Banner" alt="{{ banner.title|default:'Banner' }}">{% endif %}
                         </a>
                         {% else %}
-                        <img class="hero-img" src="{{ banner.image.url }}" alt="{{ banner.title|default:'Banner' }}">
+                        {% if banner.image %}<img class="hero-img" src="{{ banner.image.url }}" alt="{{ banner.title|default:'Banner' }}">{% else %}<img class="hero-img" src="https://via.placeholder.com/1100x420/0f172a/ffffff?text=Banner" alt="{{ banner.title|default:'Banner' }}">{% endif %}
                         {% endif %}
                     </div>
                     {% endfor %}
