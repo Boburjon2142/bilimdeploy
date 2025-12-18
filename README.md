@@ -15,6 +15,19 @@
 - `DELIVERY_BASE_FEE_UZS`, `DELIVERY_PER_KM_FEE_UZS`, `DELIVERY_MIN_FEE_UZS`, `DELIVERY_MAX_FEE_UZS`.
 - `DELIVERY_FREE_OVER_UZS` (ixtiyoriy, umumiy summa shu qiymatdan katta bo‘lsa yetkazib berish bepul).
 
+### Telegram bot (yangi buyurtmalar xabari)
+Checkout orqali xaridor yuborgan yangi buyurtma yaratilganda Telegram botga avtomatik xabar yuboriladi.
+
+.env da sozlang:
+- `TELEGRAM_SEND_ORDERS=True`
+- `TELEGRAM_BOT_TOKEN=<token>`
+- `TELEGRAM_CHAT_ID=<chat_id>` (yoki bir nechta: `-100123,12345`)
+
+Eslatma: botni chat/channelga qo‘shib, u yerdan `chat_id` ni oling (oddiy chatlarda raqam, channel/supergrouplarda odatda `-100...`).
+
+Test yuborish:
+- `python manage.py telegram_test --text "Salom, test"`
+
 ## Foydali URL lar
 - Bosh sahifa: `/`
 - Kategoriya: `/kategoriya/<slug>/`
