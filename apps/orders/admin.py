@@ -92,7 +92,16 @@ class DeliverySettingsForm(forms.ModelForm):
 @admin.register(DeliverySettings)
 class DeliverySettingsAdmin(admin.ModelAdmin):
     form = DeliverySettingsForm
-    list_display = ("base_fee_uzs", "per_km_fee_uzs", "min_fee_uzs", "max_fee_uzs", "free_over_uzs", "updated_at")
+    list_display = (
+        "base_fee_uzs",
+        "per_km_fee_uzs",
+        "min_fee_uzs",
+        "max_fee_uzs",
+        "free_over_uzs",
+        "order_start_time",
+        "order_end_time",
+        "updated_at",
+    )
 
     def save_model(self, request, obj, form, change):
         """

@@ -31,12 +31,14 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
+    "apps.accounts.apps.AccountsConfig",
     "apps.catalog.apps.CatalogConfig",
     "apps.orders.apps.OrdersConfig",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "django.middleware.gzip.GZipMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -91,6 +93,7 @@ else:
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
+DATABASES["default"]["CONN_MAX_AGE"] = int(os.getenv("DJANGO_CONN_MAX_AGE", "60"))
 
 # --- Password validation ---
 AUTH_PASSWORD_VALIDATORS = [
@@ -177,6 +180,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CART_SESSION_ID = "cart"
 FILE_UPLOAD_HANDLERS = ["django.core.files.uploadhandler.TemporaryFileUploadHandler"]
 FILE_UPLOAD_MAX_MEMORY_SIZE = 0
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "profile"
+LOGOUT_REDIRECT_URL = "home"
 
 SHOP_LAT = float(os.getenv("SHOP_LAT", "41.2995"))
 SHOP_LNG = float(os.getenv("SHOP_LNG", "69.2401"))

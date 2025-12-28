@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="px-3 py-3">
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <div class="rounded-circle d-flex align-items-center justify-content-center"
+         style="width:56px;height:56px;background:#1E2A38;color:#F2C94C;">
+      <i class="bi bi-person-circle" style="font-size:28px;"></i>
+    </div>
+    <div>
+      <h4 class="fw-bold mb-0">Profil</h4>
+      <div class="text-muted small">Akkaunt ma'lumotlari</div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm p-3 mb-3" style="border-radius:16px;">
+    <div class="row g-3">
+      <div class="col-12 col-md-6">
+        <div class="text-muted small">Ism F.I.O.</div>
+        <div class="fw-semibold">
+          {% if request.user.first_name %}
+            {{ request.user.first_name }}
+          {% else %}
+            —
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-12 col-md-6">
+        <div class="text-muted small">Telefon</div>
+        <div class="fw-semibold">{{ request.user.username }}</div>
+      </div>
+      <div class="col-12 col-md-6">
+        <div class="text-muted small">Holat</div>
+        <span class="badge text-bg-success">Faol</span>
+      </div>
+      <div class="col-12 col-md-6">
+        <div class="text-muted small">Ro‘yxatdan o‘tgan</div>
+        <div class="fw-semibold">{{ request.user.date_joined|date:"d.m.Y H:i" }}</div>
+      </div>
+      <div class="col-12 col-md-6">
+        <div class="text-muted small">Oxirgi kirish</div>
+        <div class="fw-semibold">
+          {% if request.user.last_login %}
+            {{ request.user.last_login|date:"d.m.Y H:i" }}
+          {% else %}
+            Birinchi kirish
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="d-flex gap-2 mt-3">
+      <a href="{% url 'favorites' %}" class="btn btn-outline-secondary">Sevimlilar</a>
+      <a href="{% url 'logout' %}" class="btn btn-outline-danger">Chiqish</a>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm p-3" style="border-radius:16px;">
+    <div class="fw-semibold mb-2">Mening buyurtmalarim</div>
+    {% if orders %}
+    <div class="list-group">
+      {% for order in orders %}
+      <div class="list-group-item">
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="fw-semibold">Buyurtma #{{ order.id }}</div>
+          <span class="badge text-bg-secondary">{{ order.get_status_display }}</span>
+        </div>
+        <div class="text-muted small">
+          {{ order.created_at|date:"d.m.Y H:i" }}
+        </div>
+        <div class="mt-2">
+          <div class="small text-muted">Manzil</div>
+          <div>{{ order.address }}</div>
+        </div>
+        <div class="d-flex justify-content-between mt-2">
+          <div>
+            <div class="small text-muted">Jami</div>
+            <div class="fw-semibold">{{ order.total_price|floatformat:0 }} so‘m</div>
+          </div>
+          <div class="text-end">
+            <div class="small text-muted">Yetkazish</div>
+            <div class="fw-semibold">{{ order.delivery_fee|floatformat:0 }} so‘m</div>
+          </div>
+        </div>
+        <div class="d-flex gap-2 mt-3">
+          <form method="post" action="{% url 'order_cancel' order.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger btn-sm">Bekor qilish</button>
+          </form>
+          <form method="post" action="{% url 'order_accept' order.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-success btn-sm">Qabul qildim</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-muted">Hozircha buyurtmalar yo‘q.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

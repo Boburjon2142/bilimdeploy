@@ -7,8 +7,20 @@
         .book-hero-img { height: auto !important; max-height: 520px; object-fit: cover; border-radius: 16px; }
         @media (min-width: 992px) { .book-hero-img { max-height: 720px; } }
         .btn-add-cart { min-width: 170px; height: 44px; font-weight: 600; }
+        .book-actions { display:flex; flex-direction:column; gap:10px; }
+        .book-actions form { margin:0; }
+        .qty-row { display:flex; align-items:center; gap:8px; }
+        .action-row { display:flex; gap:10px; align-items:stretch; flex-wrap:wrap; }
+        .action-row .cart-form,
+        .action-row .fav-form { flex:1 1 0; }
+        .btn-add-cart,
+        .btn-fav { width:100%; display:inline-flex; align-items:center; justify-content:center; }
+        .btn-fav { height:44px; }
         @media (max-width: 576px){
-            .btn-add-cart { font-size:14px; padding:10px 12px; min-width:120px; height:40px; }
+            .action-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+            .btn-add-cart, .btn-fav { height:40px; padding:0 8px; line-height:1; }
+            .btn-add-cart { font-size:13px; min-width:0; }
+            .btn-fav { font-size:11px; white-space:nowrap; }
         }
     </style>
     <div class="card book-card border-0">
@@ -28,28 +40,32 @@
             {% if book.description %}
             <p class="mt-2 mb-3">{{ book.description }}</p>
             {% endif %}
-            <form method="post" action="{% url 'add_to_cart' book.id %}" class="d-flex align-items-center gap-3 flex-wrap">
-                {% csrf_token %}
-                <div class="d-flex align-items-center gap-2">
+                        <div class="book-actions mt-3">
+                <div class="qty-row">
                     <button class="qty-btn" type="button" onclick="changeQty(-1)">-</button>
-                    <input type="number" id="qty" name="quantity" class="form-control text-center qty-input" value="1" min="1">
+                    <input type="number" id="qty" class="form-control text-center qty-input" value="1" min="1">
                     <button class="qty-btn" type="button" onclick="changeQty(1)">+</button>
                 </div>
-                <button class="btn btn-primary btn-add-cart" type="submit">Savatchaga qo‘shish</button>
-            </form>
-            <div class="mt-3">
-                <form
-                  class="js-fav-toggle"
-                  data-add-url="{% url 'add_favorite' book.id %}"
-                  data-remove-url="{% url 'remove_favorite' book.id %}"
-                  data-state="{% if in_favorites %}active{% else %}inactive{% endif %}"
-                >
-                    {% csrf_token %}
-                    <button class="btn btn-sm {% if in_favorites %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}" type="submit">
-                        {% if in_favorites %}Sevimlidan olib tashlash{% else %}Sevimlilarga qo‘shish{% endif %}
-                    </button>
-                </form>
+                <div class="action-row">
+                    <form method="post" action="{% url 'add_to_cart' book.id %}" class="cart-form">
+                        {% csrf_token %}
+                        <input type="hidden" id="qty-hidden" name="quantity" value="1">
+                        <button class="btn btn-primary btn-add-cart" type="submit">Savatchaga qo‘shish</button>
+                    </form>
+                    <form
+                      class="js-fav-toggle fav-form"
+                      data-add-url="{% url 'add_favorite' book.id %}"
+                      data-remove-url="{% url 'remove_favorite' book.id %}"
+                      data-state="{% if in_favorites %}active{% else %}inactive{% endif %}"
+                    >
+                        {% csrf_token %}
+                        <button class="btn btn-sm btn-fav {% if in_favorites %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}" type="submit">
+                            {% if in_favorites %}Sevimlidan olib tashlash{% else %}Sevimlilarga qo‘shish{% endif %}
+                        </button>
+                    </form>
+                </div>
             </div>
+
         </div>
     </div>
     {% if similar_books %}
@@ -75,14 +91,25 @@
     {% endif %}
 </div>
 <script>
-function changeQty(delta) {
-    const input = document.getElementById('qty');
-    let val = parseInt(input.value || '1', 10) + delta;
-    if (val < 1) val = 1;
-    input.value = val;
-}
-
-document.addEventListener("DOMContentLoaded", function() {
+ 
+function changeQty(delta) { 
+    const input = document.getElementById('qty'); 
+    const hidden = document.getElementById('qty-hidden'); 
+    let val = parseInt(input.value || '1', 10) + delta; 
+    if (val < 1) val = 1; 
+    input.value = val; 
+    if (hidden) hidden.value = val; 
+} 
+ 
+document.addEventListener("DOMContentLoaded", function() { 
+    const qtyInput = document.getElementById('qty'); 
+    const hidden = document.getElementById('qty-hidden'); 
+    if (qtyInput && hidden) { 
+        hidden.value = qtyInput.value || '1'; 
+        qtyInput.addEventListener('input', () => { 
+            hidden.value = qtyInput.value || '1'; 
+        }); 
+    } 
     // AJAXify favorites to avoid page reload
     function getCsrf() {
         const name = "csrftoken";

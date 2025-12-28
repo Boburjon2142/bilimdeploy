@@ -4,7 +4,7 @@ from django.utils.text import slugify
 
 
 class Author(models.Model):
-    name = models.CharField("Muallif", max_length=255)
+    name = models.CharField("Muallif", max_length=255, db_index=True)
     bio = models.TextField("Tarjimai hol", blank=True)
     is_featured = models.BooleanField("Asosiy sahifada ko‘rsatish", default=False)
     photo = models.ImageField("Rasm", upload_to="authors/", blank=True, null=True)
@@ -72,13 +72,14 @@ class Book(models.Model):
     author = models.ForeignKey(Author, verbose_name="Muallif", on_delete=models.CASCADE, related_name="books")
     purchase_price = models.DecimalField("Sotib olish narxi", max_digits=8, decimal_places=2)
     sale_price = models.DecimalField("Sotish narxi", max_digits=8, decimal_places=2)
+    stock_quantity = models.PositiveIntegerField("Ombordagi soni", default=0)
     description = models.TextField("Tavsif", blank=True)
     cover_image = models.ImageField("Muqova", upload_to="covers/", blank=True, null=True)
     book_format = models.CharField("Format", max_length=10, choices=FORMAT_CHOICES, blank=True)
     pages = models.PositiveIntegerField("Betlar soni", blank=True, null=True)
-    is_recommended = models.BooleanField("Tavsiya etilgan", default=False)
-    views = models.PositiveIntegerField("Ko‘rishlar soni", default=0)
-    created_at = models.DateTimeField("Yaratilgan", auto_now_add=True)
+    is_recommended = models.BooleanField("Tavsiya etilgan", default=False, db_index=True)
+    views = models.PositiveIntegerField("Ko‘rishlar soni", default=0, db_index=True)
+    created_at = models.DateTimeField("Yaratilgan", auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]

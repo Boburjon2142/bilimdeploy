@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="px-3 py-3">
+  <h4 class="fw-bold mb-3">Ro‘yxatdan o‘tish</h4>
+  <form method="post" class="card border-0 shadow-sm p-3" style="border-radius:16px;">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger py-2">
+      {% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
+    </div>
+    {% endif %}
+    <div class="mb-3">
+      <label class="form-label">Ism F.I.O.</label>
+      {{ form.full_name }}
+      {% if form.full_name.errors %}<div class="text-danger small">{{ form.full_name.errors|striptags }}</div>{% endif %}
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Telefon</label>
+      {{ form.phone }}
+      {% if form.phone.errors %}<div class="text-danger small">{{ form.phone.errors|striptags }}</div>{% endif %}
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Parol</label>
+      {{ form.password1 }}
+      {% if form.password1.errors %}<div class="text-danger small">{{ form.password1.errors|striptags }}</div>{% endif %}
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Parolni tasdiqlang</label>
+      {{ form.password2 }}
+      {% if form.password2.errors %}<div class="text-danger small">{{ form.password2.errors|striptags }}</div>{% endif %}
+    </div>
+    <button class="btn btn-primary w-100" type="submit">Ro‘yxatdan o‘tish</button>
+    <div class="text-center mt-3">
+      <a class="text-decoration-none" href="{% url 'login' %}">Kirish</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -16,13 +16,16 @@ __pycache__/
 *.pyd
 *.log
 
-# Local DB
+# Local DB / runtime data
 *.sqlite3
 db.sqlite3
 
-# Django static/media output
+# Django static/media output (uploads should stay outside repo)
 staticfiles/
 media/
+media/**
+tmp/
+deploy.zip
 
 # Python packaging / build
 build/

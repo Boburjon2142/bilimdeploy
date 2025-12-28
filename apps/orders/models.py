@@ -19,15 +19,25 @@ class Order(models.Model):
     ]
 
     full_name = models.CharField("F.I.Sh", max_length=255)
-    phone = models.CharField("Telefon", max_length=50)
+    phone = models.CharField("Telefon", max_length=50, db_index=True)
     extra_phone = models.CharField("Qo‘shimcha telefon", max_length=50, blank=True)
     location = models.CharField("Lokatsiya", max_length=255, blank=True)
     address_text = models.CharField("Qo‘shimcha manzil matni", max_length=255, blank=True)
     address = models.CharField("Mo‘ljal", max_length=255)
     note = models.TextField("Izoh", blank=True)
     payment_type = models.CharField("To‘lov turi", max_length=20, choices=PAYMENT_CHOICES, default="cash")
-    status = models.CharField("Holat", max_length=20, choices=STATUS_CHOICES, default="new")
+    status = models.CharField("Holat", max_length=20, choices=STATUS_CHOICES, default="new", db_index=True)
+    order_source = models.CharField("Manba", max_length=20, default="web")
     total_price = models.DecimalField("Umumiy summa", max_digits=10, decimal_places=2, default=0)
+    subtotal_before_discount = models.DecimalField(
+        "Chegirmasiz summa", max_digits=10, decimal_places=2, default=0
+    )
+    discount_percent = models.PositiveIntegerField("Chegirma (%)", default=0)
+    discount_amount = models.DecimalField("Chegirma summasi", max_digits=10, decimal_places=2, default=0)
+    delivery_time_choice = models.CharField(
+        "Yetkazish vaqti", max_length=10, choices=[("now", "Hozirroq"), ("schedule", "Vaqtni tanlash")], default="now"
+    )
+    delivery_time = models.TimeField("Yetkazish vaqti (ixtiyoriy)", null=True, blank=True)
     latitude = models.DecimalField("Kenglik (lat)", max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField("Uzunlik (lng)", max_digits=9, decimal_places=6, null=True, blank=True)
     maps_link = models.URLField("Xarita havolasi", blank=True, default="")
@@ -38,7 +48,7 @@ class Order(models.Model):
     )
     courier_maps_url = models.URLField("Kuryer xarita havolasi", blank=True, default="")
     delivery_pricing_snapshot = models.JSONField("Yetkazib berish hisoboti", default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -105,6 +115,8 @@ class DeliverySettings(models.Model):
     shop_lng = models.DecimalField(
         "Do‘kon lng (ixtiyoriy)", max_digits=9, decimal_places=6, null=True, blank=True
     )
+    order_start_time = models.TimeField("Buyurtma boshlanishi", null=True, blank=True)
+    order_end_time = models.TimeField("Buyurtma tugashi", null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

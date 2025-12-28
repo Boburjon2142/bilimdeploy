@@ -22,6 +22,7 @@ class BookAdminForm(forms.ModelForm):
             "author_name",
             "purchase_price",
             "sale_price",
+            "stock_quantity",
             "description",
             "cover_image",
             "book_format",

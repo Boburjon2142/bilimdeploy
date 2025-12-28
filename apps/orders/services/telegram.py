@@ -119,7 +119,7 @@ def send_order_created(order_id: int) -> None:
     lines.append(label("Telefon", e(order.phone)))
     if order.extra_phone:
         lines.append(label("Qo‘shimcha", e(order.extra_phone)))
-    lines.append(label("Mo'ljal", e(order.address)))
+    lines.append(label("Manzil", e(order.address)))
     if order.address_text:
         lines.append(label("Manzil (matn)", e(order.address_text)))
     if order.location:
@@ -149,4 +149,48 @@ def send_order_created(order_id: int) -> None:
         lines.append("<b>Izoh:</b>")
         lines.append(_truncate(e(order.note), 900))
 
+    _send_telegram_message("\n".join(lines))
+
+
+def send_order_delivered(order_id: int) -> None:
+    """
+    Notify Telegram that an order has been delivered/accepted.
+    """
+    from apps.orders.models import Order
+
+    order = Order.objects.filter(id=order_id).first()
+    if not order:
+        return
+
+    def e(value) -> str:
+        return html_escape("" if value is None else str(value), quote=True)
+
+    lines: List[str] = []
+    lines.append("<b>Buyurtma yetkazildi</b>")
+    lines.append(f"<b>ID:</b> #{order.id}")
+    lines.append(f"<b>F.I.Sh:</b> {e(order.full_name)}")
+    lines.append(f"<b>Telefon:</b> {e(order.phone)}")
+    lines.append(f"<b>Manzil:</b> {e(order.address)}")
+    _send_telegram_message("\n".join(lines))
+
+
+def send_order_canceled(order_id: int) -> None:
+    """
+    Notify Telegram that an order has been canceled.
+    """
+    from apps.orders.models import Order
+
+    order = Order.objects.filter(id=order_id).first()
+    if not order:
+        return
+
+    def e(value) -> str:
+        return html_escape("" if value is None else str(value), quote=True)
+
+    lines: List[str] = []
+    lines.append("<b>Buyurtma bekor qilindi</b>")
+    lines.append(f"<b>ID:</b> #{order.id}")
+    lines.append(f"<b>F.I.Sh:</b> {e(order.full_name)}")
+    lines.append(f"<b>Telefon:</b> {e(order.phone)}")
+    lines.append(f"<b>Manzil:</b> {e(order.address)}")
     _send_telegram_message("\n".join(lines))

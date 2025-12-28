@@ -1,8 +1,10 @@
 from decimal import Decimal
 
 from django.conf import settings
+from django.utils import timezone
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.db import transaction
@@ -14,6 +16,7 @@ from .models import DeliveryNotice, DeliverySettings, Order, OrderItem
 from .services.delivery import recalculate_delivery
 
 
+@login_required
 def cart_detail(request):
     cart = Cart(request)
     return render(request, "cart.html", {"cart_items": list(cart.items()), "cart_total": cart.total_price()})
@@ -27,7 +30,7 @@ def add_to_cart(request, book_id):
     except (TypeError, ValueError):
         quantity = 1
     cart.add(book_id, quantity)
-    return redirect("home")
+    return redirect(request.META.get("HTTP_REFERER", "home"))
 
 
 
@@ -49,18 +52,36 @@ def update_cart(request, book_id):
     return redirect("cart_detail")
 
 
+@login_required
 def checkout(request):
     cart = Cart(request)
     cart_items = list(cart.items())
     if not cart_items:
         return redirect("cart_detail")
 
+    def _in_order_window(cfg, now_time):
+        if not cfg.order_start_time or not cfg.order_end_time:
+            return True
+        start = cfg.order_start_time
+        end = cfg.order_end_time
+        if start <= end:
+            return start <= now_time <= end
+        return now_time >= start or now_time <= end
+
+    cfg = DeliverySettings.get_active()
+    can_order = _in_order_window(cfg, timezone.localtime().time())
+
     if request.method == "POST":
         form = CheckoutForm(request.POST)
-        if form.is_valid():
+        if not can_order:
+            form.add_error(None, "Barcha kuryerlar band")
+        elif form.is_valid():
             with transaction.atomic():
                 order = form.save(commit=False)
                 order.total_price = cart.total_price()
+                order.subtotal_before_discount = order.total_price
+                order.discount_percent = order.discount_percent or 0
+                order.discount_amount = order.discount_amount or 0
                 order = recalculate_delivery(order, save=False)
                 order.save()
                 for item in cart_items:
@@ -74,10 +95,15 @@ def checkout(request):
                 request.session["last_order_id"] = order.id
             return redirect(reverse("order_confirmation"))
     else:
-        form = CheckoutForm()
+        user = request.user
+        form = CheckoutForm(
+            initial={
+                "full_name": user.first_name or "",
+                "phone": user.username or "",
+            }
+        )
 
     delivery_notices = DeliveryNotice.objects.filter(is_active=True).order_by("-updated_at")[:5]
-    cfg = DeliverySettings.get_active()
 
     def _valid_coord(val: float, kind: str) -> bool:
         if val is None:
@@ -106,6 +132,7 @@ def checkout(request):
             "delivery_notices": delivery_notices,
             "origin_lat": origin_lat,
             "origin_lng": origin_lng,
+            "can_order": can_order,
         },
     )
 
