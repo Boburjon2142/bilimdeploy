@@ -47,7 +47,7 @@
                     <button class="qty-btn" type="button" onclick="changeQty(1)">+</button>
                 </div>
                 <div class="action-row">
-                    <form method="post" action="{% url 'add_to_cart' book.id %}" class="cart-form">
+                    <form method="post" action="{% url 'add_to_cart' book.id %}" class="cart-form js-cart-add">
                         {% csrf_token %}
                         <input type="hidden" id="qty-hidden" name="quantity" value="1">
                         <button class="btn btn-primary btn-add-cart" type="submit">Savatchaga qo‘shish</button>
@@ -59,7 +59,7 @@
                       data-state="{% if in_favorites %}active{% else %}inactive{% endif %}"
                     >
                         {% csrf_token %}
-                        <button class="btn btn-sm btn-fav {% if in_favorites %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}" type="submit">
+                        <button class="btn btn-sm btn-fav {% if in_favorites %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}" type="button">
                             {% if in_favorites %}Sevimlidan olib tashlash{% else %}Sevimlilarga qo‘shish{% endif %}
                         </button>
                     </form>
@@ -124,11 +124,11 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     document.querySelectorAll(".js-fav-toggle").forEach(form => {
-        form.addEventListener("submit", function(e) {
-            e.preventDefault();
+        const btn = form.querySelector("button");
+        if (!btn) return;
+        btn.addEventListener("click", function() {
             const isActive = form.dataset.state === "active";
             const url = isActive ? form.dataset.removeUrl : form.dataset.addUrl;
-            const btn = form.querySelector("button");
             fetch(url, {
                 method: "POST",
                 headers: {
@@ -147,6 +147,33 @@ document.addEventListener("DOMContentLoaded", function() {
                     btn.classList.remove("btn-outline-secondary");
                     btn.classList.add("btn-outline-danger");
                     btn.textContent = "Sevimlidan olib tashlash";
+                }
+            }).catch(() => form.submit());
+        });
+    });
+
+    document.querySelectorAll(".js-cart-add").forEach(form => {
+        form.addEventListener("submit", function(e) {
+            e.preventDefault();
+            const btn = form.querySelector("button");
+            const originalText = btn ? btn.textContent : "";
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = "Qo‘shildi";
+            }
+            fetch(form.action, {
+                method: "POST",
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-CSRFToken": getCsrf(),
+                },
+                body: new FormData(form),
+            }).then(() => {
+                if (btn) {
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.textContent = originalText || "Savatchaga qo‘shish";
+                    }, 1200);
                 }
             }).catch(() => form.submit());
         });
