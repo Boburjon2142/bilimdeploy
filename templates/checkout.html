@@ -43,6 +43,16 @@
             {% if form.location.errors %}<div class="text-danger small">{{ form.location.errors|striptags }}</div>{% endif %}
         </div>
         <div class="mt-3">
+            <label class="form-label">Manzilni nomi bilan qidirish</label>
+            <div class="input-group">
+                <span class="input-group-text bg-white border-end-0"><i class="bi bi-geo-alt text-muted"></i></span>
+                <input type="text" class="form-control border-start-0" id="place-query" placeholder="Masalan: Chilonzor, Toshkent">
+                <button class="btn btn-outline-secondary" type="button" id="place-search-btn">Qidirish</button>
+            </div>
+            <div id="place-results" class="list-group mt-2" style="display:none;"></div>
+            <small class="text-muted d-block mt-1">Natijadan tanlasangiz, lokatsiya va xarita avtomatik to‘ldiriladi.</small>
+        </div>
+        <div class="mt-3">
             <label class="form-label">Mo'ljal</label>
             {{ form.address }}
             {% if form.address.errors %}<div class="text-danger small">{{ form.address.errors|striptags }}</div>{% endif %}
@@ -137,6 +147,10 @@ document.addEventListener("DOMContentLoaded", function () {
     const manualLat = document.getElementById("manual-lat");
     const manualLng = document.getElementById("manual-lng");
     const mapsInput = document.getElementById("id_maps_link");
+    const locationInput = document.getElementById("id_location");
+    const placeQuery = document.getElementById("place-query");
+    const placeSearchBtn = document.getElementById("place-search-btn");
+    const placeResults = document.getElementById("place-results");
     const openMapsBtn = document.getElementById("open-google-maps");
     const quoteBox = document.getElementById("delivery-quote");
     const subtotalEl = document.getElementById("checkout-subtotal");
@@ -146,6 +160,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const defaultLng = parseFloat(mapBox.dataset.defaultLng) || 69.2401;
     let centerLat = parseFloat(latInput.value);
     let centerLng = parseFloat(lngInput.value);
+    let map = null;
+    let marker = null;
+    let staticImg = null;
     if (!isFinite(centerLat) || !isFinite(centerLng)) {
         centerLat = defaultLat;
         centerLng = defaultLng;
@@ -209,6 +226,36 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
+    function setMarker(lat, lng) {
+        if (!map || typeof L === "undefined") return;
+        if (marker) {
+            marker.setLatLng([lat, lng]);
+        } else {
+            marker = L.marker([lat, lng]).addTo(map);
+        }
+    }
+
+    function updateStaticMap(lat, lng) {
+        if (!staticImg) return;
+        staticImg.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${lat.toFixed(6)},${lng.toFixed(6)}&zoom=${zoom}&size=900x450&markers=${lat.toFixed(6)},${lng.toFixed(6)},red-pushpin`;
+    }
+
+    function applyCoords(lat, lng, label) {
+        latInput.value = lat.toFixed(6);
+        lngInput.value = lng.toFixed(6);
+        centerLat = lat;
+        centerLng = lng;
+        if (map) map.setView([centerLat, centerLng], zoom);
+        setMarker(centerLat, centerLng);
+        updateStaticMap(centerLat, centerLng);
+        if (mapError) mapError.style.display = "none";
+        if (locationInput && label) {
+            locationInput.value = label;
+        }
+        setMapsLinkFromCoords();
+        fetchQuote();
+    }
+
     // Leaflet attempt
     (function initLeaflet() {
         const leafletCss = document.createElement("link");
@@ -228,23 +275,15 @@ document.addEventListener("DOMContentLoaded", function () {
     function buildLeafletMap() {
         if (typeof L === "undefined") return buildStaticFallback();
         try {
-            const map = L.map("order-map").setView([centerLat, centerLng], zoom);
+            map = L.map("order-map").setView([centerLat, centerLng], zoom);
             map.zoomControl.setPosition("topright");
             L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
                 attribution: "&copy; OpenStreetMap",
             }).addTo(map);
-            let marker = L.marker([centerLat, centerLng]).addTo(map);
+            marker = L.marker([centerLat, centerLng]).addTo(map);
             map.on("click", function (e) {
                 const { lat, lng } = e.latlng;
-                latInput.value = lat.toFixed(6);
-                lngInput.value = lng.toFixed(6);
-                centerLat = lat;
-                centerLng = lng;
-                if (marker) marker.setLatLng([lat, lng]);
-                else marker = L.marker([lat, lng]).addTo(map);
-                if (mapError) mapError.style.display = "none";
-                setMapsLinkFromCoords();
-                fetchQuote();
+                applyCoords(lat, lng);
             });
         } catch (err) {
             buildStaticFallback();
@@ -254,14 +293,14 @@ document.addEventListener("DOMContentLoaded", function () {
     function buildStaticFallback() {
         const mapContainer = mapBox;
         mapContainer.innerHTML = "";
-        const img = document.createElement("img");
-        img.alt = "Xarita";
-        img.style.width = "100%";
-        img.style.height = "100%";
-        img.style.objectFit = "cover";
-        img.referrerPolicy = "no-referrer";
-        img.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${centerLat},${centerLng}&zoom=${zoom}&size=900x450&markers=${centerLat},${centerLng},red-pushpin`;
-        mapContainer.appendChild(img);
+        staticImg = document.createElement("img");
+        staticImg.alt = "Xarita";
+        staticImg.style.width = "100%";
+        staticImg.style.height = "100%";
+        staticImg.style.objectFit = "cover";
+        staticImg.referrerPolicy = "no-referrer";
+        updateStaticMap(centerLat, centerLng);
+        mapContainer.appendChild(staticImg);
 
         const tileSize = 256;
         const scale = () => tileSize * Math.pow(2, zoom);
@@ -278,24 +317,17 @@ document.addEventListener("DOMContentLoaded", function () {
         };
 
         mapContainer.addEventListener("click", function (e) {
-            const rect = img.getBoundingClientRect();
+            const rect = staticImg.getBoundingClientRect();
             const dx = e.clientX - rect.left - rect.width / 2;
             const dy = e.clientY - rect.top - rect.height / 2;
-            const scaleFactorX = (img.naturalWidth || rect.width) / rect.width;
-            const scaleFactorY = (img.naturalHeight || rect.height) / rect.height;
+            const scaleFactorX = (staticImg.naturalWidth || rect.width) / rect.width;
+            const scaleFactorY = (staticImg.naturalHeight || rect.height) / rect.height;
             const centerX = lonToX(centerLng);
             const centerY = latToY(centerLat);
             const worldX = centerX + dx * scaleFactorX;
             const worldY = centerY + dy * scaleFactorY;
             const { lat, lng } = xyToLatLng(worldX, worldY);
-            latInput.value = lat.toFixed(6);
-            lngInput.value = lng.toFixed(6);
-            centerLat = lat;
-            centerLng = lng;
-            img.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${lat.toFixed(6)},${lng.toFixed(6)}&zoom=${zoom}&size=900x450&markers=${lat.toFixed(6)},${lng.toFixed(6)},red-pushpin`;
-            if (mapError) mapError.style.display = "none";
-            setMapsLinkFromCoords();
-            fetchQuote();
+            applyCoords(lat, lng);
         });
     }
 
@@ -304,18 +336,68 @@ document.addEventListener("DOMContentLoaded", function () {
             const latVal = parseFloat(manualLat.value);
             const lngVal = parseFloat(manualLng.value);
             if (isNaN(latVal) || isNaN(lngVal)) return;
-            latInput.value = latVal.toFixed(6);
-            lngInput.value = lngVal.toFixed(6);
-            centerLat = latVal;
-            centerLng = lngVal;
-            setMarker(centerLat, centerLng);
-            if (map) map.setView([centerLat, centerLng], 13);
-            if (mapError) mapError.style.display = "none";
-            setMapsLinkFromCoords();
-            fetchQuote();
+            applyCoords(latVal, lngVal);
         };
         manualLat.addEventListener("change", syncManual);
         manualLng.addEventListener("change", syncManual);
+    }
+
+    function renderPlaceResults(items) {
+        if (!placeResults) return;
+        placeResults.innerHTML = "";
+        if (!items.length) {
+            placeResults.style.display = "none";
+            return;
+        }
+        items.forEach((item) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "list-group-item list-group-item-action";
+            btn.textContent = item.display_name;
+            btn.addEventListener("click", () => {
+                const lat = parseFloat(item.lat);
+                const lng = parseFloat(item.lon);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    applyCoords(lat, lng, item.display_name);
+                }
+                placeResults.style.display = "none";
+            });
+            placeResults.appendChild(btn);
+        });
+        placeResults.style.display = "block";
+    }
+
+    function searchPlace() {
+        if (!placeQuery || !placeResults) return;
+        const q = (placeQuery.value || "").trim();
+        if (!q) {
+            placeResults.style.display = "none";
+            return;
+        }
+        placeResults.style.display = "block";
+        placeResults.innerHTML = "<div class=\"list-group-item\">Qidirilmoqda...</div>";
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}`;
+        fetch(url, { headers: { "Accept": "application/json" } })
+            .then((res) => res.json())
+            .then((data) => {
+                if (!Array.isArray(data)) data = [];
+                renderPlaceResults(data);
+            })
+            .catch(() => {
+                placeResults.innerHTML = "<div class=\"list-group-item text-danger\">Qidiruvda xatolik yuz berdi.</div>";
+            });
+    }
+
+    if (placeSearchBtn) {
+        placeSearchBtn.addEventListener("click", searchPlace);
+    }
+    if (placeQuery) {
+        placeQuery.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                searchPlace();
+            }
+        });
     }
 
     if (openMapsBtn) {

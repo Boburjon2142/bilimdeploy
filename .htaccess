@@ -1,14 +1,1 @@
-PassengerAppRoot "/home/bilimsto/bookstore"
-PassengerBaseURI "/"
-PassengerPython "/home/bilimsto/virtualenv/bookstore/3.10/bin/python3.10"
-PassengerStartupFile passenger_wsgi.py
-
-Alias /static /home/bilimsto/bookstore/staticfiles/
-<Directory /home/bilimsto/bookstore/staticfiles/>
-    Require all granted
-</Directory>
-
-Alias /media /home/bilimsto/bookstore/media/
-<Directory /home/bilimsto/bookstore/media/>
-    Require all granted
-</Directory>
+PassengerEnabled on

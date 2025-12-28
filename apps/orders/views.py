@@ -27,7 +27,8 @@ def add_to_cart(request, book_id):
     except (TypeError, ValueError):
         quantity = 1
     cart.add(book_id, quantity)
-    return redirect("cart_detail")
+    return redirect("home")
+
 
 
 @require_POST

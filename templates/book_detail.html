@@ -52,6 +52,27 @@
             </div>
         </div>
     </div>
+    {% if similar_books %}
+    <div class="section-head mt-4">
+        <h5 class="section-title mb-0">O‘xshash adabiyotlar</h5>
+    </div>
+    <div class="strip fade-edges mb-2">
+        {% for item in similar_books %}
+        <div class="book-strip-card">
+            {% if item.cover_image %}
+            <img src="{{ item.cover_image.url }}" alt="{{ item.title }}">
+            {% else %}
+            <img src="https://via.placeholder.com/420x240?text=Rasm+yo%27q" alt="{{ item.title }}">
+            {% endif %}
+            <div class="meta">
+                <p class="title">{{ item.title }}</p>
+                <p class="author">{{ item.author.name }}</p>
+                <a href="{{ item.get_absolute_url }}" class="stretched-link"></a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 <script>
 function changeQty(delta) {

@@ -35,6 +35,17 @@
         <input type="hidden" name="limit" value="{{ current_limit }}">
     </form>
 
+ {% if top_searched %}
+    <div class="mb-3">
+        <div class="fw-semibold mb-2">Eng ko‘p qidirilganlar</div>
+        <div class="d-flex flex-wrap gap-2">
+            {% for book in top_searched %}
+            <a class="btn btn-sm btn-outline-secondary" href="{{ book.get_absolute_url }}">{{ book.title }}</a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <div class="row g-3">
         {% for book in books %}
         <div class="col-6 col-md-3">
@@ -46,7 +57,7 @@
                 {% endif %}
                 <div class="p-2">
                     <div class="fw-semibold" style="font-size: 14px; line-height: 1.2;">{{ book.title }}</div>
-                    <div class="text-muted" style="font-size: 12px;">{{ book.author.name }} | {{ book.category.name }}</div>
+                    <div class="text-muted" style="font-size: 12px;">{{ book.author.name }}</div>
                     <div class="fw-bold text-primary mt-1">{{ book.sale_price|intcomma }} so‘m</div>
                     <a href="{{ book.get_absolute_url }}" class="stretched-link"></a>
                 </div>

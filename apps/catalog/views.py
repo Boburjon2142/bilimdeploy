@@ -3,6 +3,7 @@ from django.db.models import Q, F
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.core.cache import cache
+from django.views.decorators.cache import cache_page
 from django.conf import settings
 from django.utils.translation import get_language
 from .models import Category, Book, Author, Banner, FeaturedCategory
@@ -27,6 +28,7 @@ LIST_TTL = 60 * 30  # 30 minutes; bestseller/recommended lists are stable
 CATEGORY_TTL = 60 * 60  # 1 hour; taxonomy changes rarely
 
 
+@cache_page(60 * 5)  # 5 minutes
 def home(request):
     lang = get_language() or getattr(settings, "LANGUAGE_CODE", "default")
     # Cache only public, non-user-specific content to reduce DB hits.
@@ -224,7 +226,21 @@ def book_detail(request, id, slug):
     Book.objects.filter(id=book.id).update(views=F("views") + 1)
     favorites = request.session.get("favorites", [])
     in_favorites = str(book.id) in favorites
-    return render(request, "book_detail.html", {"book": book, "in_favorites": in_favorites})
+    similar_books = (
+        Book.objects.filter(category=book.category)
+        .exclude(id=book.id)
+        .select_related("author", "category")
+        .order_by("-views")[:10]
+    )
+    return render(
+        request,
+        "book_detail.html",
+        {
+            "book": book,
+            "in_favorites": in_favorites,
+            "similar_books": similar_books,
+        },
+    )
 
 
 def search(request):
@@ -254,6 +270,10 @@ def search(request):
     ]
 
     limit_options = ["8", "12", "16", "24", "32"]
+    top_searched = (
+        Book.objects.select_related("author", "category")
+        .order_by("-views")[:5]
+    )
 
     if query:
         books = Book.objects.filter(
@@ -304,6 +324,7 @@ def search(request):
             "books": books,
             "authors": authors,
             "categories": categories,
+            "top_searched": top_searched,
             "current_author": author_id,
             "current_category": category_slug,
             "current_sort": sort,
