@@ -23,9 +23,9 @@ from .cache_keys import (
     categories_top_key,
 )
 
-HOME_TTL = 60 * 12  # 12 minutes; homepage rotates moderately often
-LIST_TTL = 60 * 30  # 30 minutes; bestseller/recommended lists are stable
-CATEGORY_TTL = 60 * 60  # 1 hour; taxonomy changes rarely
+HOME_TTL = 60 * 5  # 5 minutes; homepage rotates moderately often
+LIST_TTL = 60 * 10  # 10 minutes; bestseller/recommended lists are stable
+CATEGORY_TTL = 60 * 15  # 15 minutes; taxonomy changes rarely
 
 
 @cache_page(60 * 5)  # 5 minutes
