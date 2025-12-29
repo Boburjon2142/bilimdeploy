@@ -23,15 +23,7 @@
                     </div>
                 {% endif %}
             </div>
-            <div class="carousel-indicators" style="bottom: 14px;">
-                {% if banners %}
-                    {% for banner in banners %}
-                    <button type="button" data-bs-target="#heroCarousel" data-bs-slide-to="{{ forloop.counter0 }}" class="{% if forloop.first %}active{% endif %}" {% if forloop.first %}aria-current="true"{% endif %}></button>
-                    {% endfor %}
-                {% else %}
-                    <button type="button" data-bs-target="#heroCarousel" data-bs-slide-to="0" class="active" aria-current="true"></button>
-                {% endif %}
-            </div>
+            {# indicators removed #}
         </div>
     </div>
     <div class="hero-divider"></div>
