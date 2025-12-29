@@ -4,6 +4,7 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.models import User
 
+from .models import LibraryBook
 
 def normalize_phone(value: str) -> str:
     value = value.strip()
@@ -60,3 +61,26 @@ class PhoneAuthenticationForm(AuthenticationForm):
     def clean_username(self):
         username = self.cleaned_data.get("username", "")
         return normalize_phone(username)
+
+
+class LibraryBookForm(forms.ModelForm):
+    class Meta:
+        model = LibraryBook
+        fields = ("title", "author", "status")
+        widgets = {
+            "title": forms.TextInput(attrs={"class": "form-control", "placeholder": "Kitob nomi"}),
+            "author": forms.TextInput(attrs={"class": "form-control", "placeholder": "Muallif"}),
+            "status": forms.Select(attrs={"class": "form-select"}),
+        }
+
+    def clean_title(self):
+        title = (self.cleaned_data.get("title") or "").strip()
+        if not title:
+            raise forms.ValidationError("Kitob nomini kiriting.")
+        return title
+
+    def clean_author(self):
+        author = (self.cleaned_data.get("author") or "").strip()
+        if not author:
+            raise forms.ValidationError("Muallifni kiriting.")
+        return author

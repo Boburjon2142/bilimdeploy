@@ -82,6 +82,25 @@ bookstore/
    - URL: `/media/` -> `/home/<username>/bookstore/media` (agar kerak bo‘lsa)
 9. **Reload**: PythonAnywhere web dashboarddan “Reload” bosing.
 
+## cPanel/Passenger (aHost) uchun deploy
+1. **Upload**: loyihani serverga joylang (masalan: `/home/<cpanel_user>/bilimdeploy`).
+2. **Virtualenv**: cPanel → Setup Python App orqali Python 3.12 app yarating va project root'ni tanlang.
+3. **Kutubxonalar**: app venv ichida `pip install -r requirements.txt`.
+4. **Env**: `.env.example` ni `.env` ga ko‘chiring va prod qiymatlarni kiriting:
+   - `DJANGO_DEBUG=False`
+   - `DJANGO_ALLOWED_HOSTS=bilimstore.uz,www.bilimstore.uz`
+   - `DJANGO_CSRF_TRUSTED_ORIGINS=https://bilimstore.uz,https://www.bilimstore.uz`
+5. **DB**: `DATABASE_URL` ni prod DB ga sozlang (Postgres tavsiya).
+   - Agar MySQL ishlatsangiz, `mysqlclient` paketini o‘rnating va `DATABASE_URL` ni moslang.
+6. **Static**: `python manage.py collectstatic --noinput`
+7. **cPanel static mapping**:
+   - `/static/` → `/home/<cpanel_user>/bilimdeploy/staticfiles`
+   - `/media/` → `/home/<cpanel_user>/bilimdeploy/media`
+8. **Passenger**:
+   - `passenger_wsgi.py` repo ichida; u avtomatik project root'ni oladi.
+   - `public_html/.htaccess` ichida `PassengerEnabled on` bo‘lishi kerak (namuna `.htaccess` faylida).
+9. **Restart**: cPanel “Setup Python App” sahifasida “Restart” bosing.
+
 ## Eslatma
 - Prod uchun HTTPS bo‘lsa, `DJANGO_SECURE_SSL_REDIRECT=True` va cookie secure flaglarini True qiling.
 - Postgres ishlatmoqchi bo‘lsangiz, `.env` da `DJANGO_DB_ENGINE=postgres` va POSTGRES_* ni to‘ldiring.

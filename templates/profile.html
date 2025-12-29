@@ -1,4 +1,11 @@
 {% extends "base.html" %}
+{% block extra_css %}
+<style>
+  .library-filter { border:1px solid #e6e6e6; background:#f8f9fb; }
+  .library-filter.active { border-color:#1E2A38; background:#eef1f5; color:#1E2A38; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="px-3 py-3">
   <div class="d-flex align-items-center gap-3 mb-3">
@@ -53,6 +60,109 @@
     </div>
   </div>
 
+  <div id="library-section" class="card border-0 shadow-sm p-3 mb-3" style="border-radius:16px;">
+    <div class="fw-semibold mb-1">Mening kutubxonam</div>
+    <div class="text-muted small mb-3">Muallif va nom bo‘yicha kitoblaringiz</div>
+
+    <div id="library-errors" class="alert alert-danger py-2 mb-3 d-none">
+      Iltimos, kitob ma'lumotlarini to‘g‘ri kiriting.
+    </div>
+    {% if library_form.errors %}
+    <div class="alert alert-danger py-2 mb-3">
+      Iltimos, kitob ma'lumotlarini to‘g‘ri kiriting.
+    </div>
+    {% endif %}
+
+    <form id="library-add-form" method="post" action="{% url 'library_add' %}" class="row g-2 align-items-end mb-3">
+      {% csrf_token %}
+      <div class="col-12 col-md-4">
+        {{ library_form.title.label_tag }}
+        {{ library_form.title }}
+      </div>
+      <div class="col-12 col-md-4">
+        {{ library_form.author.label_tag }}
+        {{ library_form.author }}
+      </div>
+      <div class="col-12 col-md-3">
+        {{ library_form.status.label_tag }}
+        {{ library_form.status }}
+      </div>
+      <div class="col-12 col-md-1 d-grid">
+        <button type="submit" class="btn btn-primary">Qo‘shish</button>
+      </div>
+    </form>
+
+    <form id="library-search-form" method="get" action="{% url 'profile' %}" class="mb-3">
+      <div class="input-group">
+        <input id="library-q" type="text" name="library_q" class="form-control" placeholder="Muallif yoki nom bo‘yicha qidirish" value="{{ library_q }}">
+        <button class="btn btn-outline-secondary" type="submit">Qidirish</button>
+      </div>
+    </form>
+
+    <div class="row g-2 mb-3">
+      <div class="col-6 col-md-3">
+        <button type="button" class="library-filter border rounded-3 p-2 text-center bg-light w-100" data-status="all">
+          <div class="text-muted small">Jami</div>
+          <div id="library-total" class="fw-semibold">{{ library_counts.total|default:0 }}</div>
+        </button>
+      </div>
+      <div class="col-6 col-md-3">
+        <button type="button" class="library-filter border rounded-3 p-2 text-center bg-light w-100" data-status="finished">
+          <div class="text-muted small">O‘qilgan</div>
+          <div id="library-finished" class="fw-semibold">{{ library_counts.finished|default:0 }}</div>
+        </button>
+      </div>
+      <div class="col-6 col-md-3">
+        <button type="button" class="library-filter border rounded-3 p-2 text-center bg-light w-100" data-status="reading">
+          <div class="text-muted small">O‘qilmoqda</div>
+          <div id="library-reading" class="fw-semibold">{{ library_counts.reading|default:0 }}</div>
+        </button>
+      </div>
+      <div class="col-6 col-md-3">
+        <button type="button" class="library-filter border rounded-3 p-2 text-center bg-light w-100" data-status="unread">
+          <div class="text-muted small">O‘qilmagan</div>
+          <div id="library-unread" class="fw-semibold">{{ library_counts.unread|default:0 }}</div>
+        </button>
+      </div>
+    </div>
+
+    <div id="library-list" class="list-group">
+      {% for item in library_items %}
+      <div class="list-group-item" data-id="{{ item.id }}">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-semibold library-title">{{ item.title }}</div>
+            <div class="text-muted small library-author">{{ item.author }}</div>
+          </div>
+          {% if item.status == "finished" %}
+            <span class="badge text-bg-success">O‘qilgan</span>
+          {% elif item.status == "reading" %}
+            <span class="badge text-bg-warning">O‘qilmoqda</span>
+          {% else %}
+            <span class="badge text-bg-secondary">O‘qilmagan</span>
+          {% endif %}
+        </div>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          <form method="post" action="{% url 'library_status' item.id %}">
+            {% csrf_token %}
+            <select name="status" class="form-select form-select-sm" data-action="status" data-url="{% url 'library_status' item.id %}">
+              <option value="unread" {% if item.status == "unread" %}selected{% endif %}>O‘qilmagan</option>
+              <option value="reading" {% if item.status == "reading" %}selected{% endif %}>O‘qilmoqda</option>
+              <option value="finished" {% if item.status == "finished" %}selected{% endif %}>O‘qilgan</option>
+            </select>
+          </form>
+          <form method="post" action="{% url 'library_delete' item.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger btn-sm" data-action="delete" data-url="{% url 'library_delete' item.id %}">O‘chirish</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div id="library-empty" class="text-muted {% if library_items %}d-none{% endif %}">Hozircha kutubxonada kitob yo‘q.</div>
+    <nav id="library-pagination" class="mt-3"></nav>
+  </div>
+
   <div class="card border-0 shadow-sm p-3" style="border-radius:16px;">
     <div class="fw-semibold mb-2">Mening buyurtmalarim</div>
     {% if orders %}
@@ -98,4 +208,328 @@
     {% endif %}
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const section = document.getElementById("library-section");
+    if (!section) return;
+
+    const listEl = document.getElementById("library-list");
+    const emptyEl = document.getElementById("library-empty");
+    const errorEl = document.getElementById("library-errors");
+    const addForm = document.getElementById("library-add-form");
+    const searchForm = document.getElementById("library-search-form");
+    const searchInput = document.getElementById("library-q");
+    const listUrl = "{% url 'library_list' %}";
+    const filterButtons = Array.from(document.querySelectorAll(".library-filter"));
+    let itemsCache = [];
+    let activeStatus = "all";
+    let currentPage = 1;
+    const pageSize = 5;
+
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(";").shift();
+      return "";
+    }
+
+    function setText(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    }
+
+    function statusMeta(status) {
+      if (status === "finished") return { text: "O‘qilgan", cls: "text-bg-success" };
+      if (status === "reading") return { text: "O‘qilmoqda", cls: "text-bg-warning" };
+      return { text: "O‘qilmagan", cls: "text-bg-secondary" };
+    }
+
+    function renderCounts(counts) {
+      setText("library-total", counts.total || 0);
+      setText("library-finished", counts.finished || 0);
+      setText("library-reading", counts.reading || 0);
+      setText("library-unread", counts.unread || 0);
+    }
+
+    function renderList(items) {
+      listEl.innerHTML = "";
+      if (!items || items.length === 0) {
+        listEl.classList.add("d-none");
+        if (emptyEl) emptyEl.classList.remove("d-none");
+        renderPagination(0);
+        return;
+      }
+      listEl.classList.remove("d-none");
+      if (emptyEl) emptyEl.classList.add("d-none");
+      items.forEach((item) => {
+        const meta = statusMeta(item.status);
+        const row = document.createElement("div");
+        row.className = "list-group-item";
+        row.dataset.id = item.id;
+
+        const header = document.createElement("div");
+        header.className = "d-flex justify-content-between align-items-center";
+        const left = document.createElement("div");
+        const title = document.createElement("div");
+        title.className = "fw-semibold library-title";
+        title.textContent = item.title;
+        const author = document.createElement("div");
+        author.className = "text-muted small library-author";
+        author.textContent = item.author;
+        left.appendChild(title);
+        left.appendChild(author);
+        const badge = document.createElement("span");
+        badge.className = `badge ${meta.cls}`;
+        badge.textContent = meta.text;
+        header.appendChild(left);
+        header.appendChild(badge);
+
+        const actions = document.createElement("div");
+        actions.className = "d-flex flex-wrap gap-2 mt-2";
+
+        const select = document.createElement("select");
+        select.className = "form-select form-select-sm";
+        select.setAttribute("data-action", "status");
+        select.setAttribute("data-url", "{% url 'library_status' 0 %}".replace("/0/", `/${item.id}/`));
+        [
+          { value: "unread", text: "O‘qilmagan" },
+          { value: "reading", text: "O‘qilmoqda" },
+          { value: "finished", text: "O‘qilgan" },
+        ].forEach((opt) => {
+          const o = document.createElement("option");
+          o.value = opt.value;
+          o.textContent = opt.text;
+          if (opt.value === item.status) o.selected = true;
+          select.appendChild(o);
+        });
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "btn btn-outline-danger btn-sm";
+        delBtn.textContent = "O‘chirish";
+        delBtn.setAttribute("data-action", "delete");
+        delBtn.setAttribute("data-url", "{% url 'library_delete' 0 %}".replace("/0/", `/${item.id}/`));
+
+        actions.appendChild(select);
+        actions.appendChild(delBtn);
+
+        row.appendChild(header);
+        row.appendChild(actions);
+        listEl.appendChild(row);
+      });
+    }
+
+    function renderPagination(totalItems) {
+      const nav = document.getElementById("library-pagination");
+      if (!nav) return;
+      const totalPages = Math.max(1, Math.ceil((totalItems || 0) / pageSize));
+      if (!totalItems || totalPages <= 1) {
+        nav.innerHTML = "";
+        return;
+      }
+      if (currentPage > totalPages) currentPage = totalPages;
+      const ul = document.createElement("ul");
+      ul.className = "pagination pagination-sm mb-0";
+
+      const makeItem = (label, page, disabled, active) => {
+        const li = document.createElement("li");
+        li.className = "page-item";
+        if (disabled) li.classList.add("disabled");
+        if (active) li.classList.add("active");
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "page-link";
+        btn.textContent = label;
+        if (!disabled) {
+          btn.addEventListener("click", function () {
+            currentPage = page;
+            applyFilter();
+          });
+        }
+        li.appendChild(btn);
+        return li;
+      };
+
+      ul.appendChild(makeItem("Prev", Math.max(1, currentPage - 1), currentPage === 1, false));
+      for (let i = 1; i <= totalPages; i += 1) {
+        ul.appendChild(makeItem(String(i), i, false, i === currentPage));
+      }
+      ul.appendChild(makeItem("Next", Math.min(totalPages, currentPage + 1), currentPage === totalPages, false));
+      nav.innerHTML = "";
+      nav.appendChild(ul);
+    }
+
+    function hydrateItemsFromDom() {
+      if (!listEl) return;
+      const rows = listEl.querySelectorAll(".list-group-item");
+      const items = [];
+      rows.forEach((row) => {
+        const titleEl = row.querySelector(".library-title");
+        const authorEl = row.querySelector(".library-author");
+        const select = row.querySelector("select[data-action='status']");
+        const id = row.dataset.id ? Number(row.dataset.id) : null;
+        items.push({
+          id: Number.isNaN(id) ? null : id,
+          title: titleEl ? titleEl.textContent.trim() : "",
+          author: authorEl ? authorEl.textContent.trim() : "",
+          status: select ? select.value : "unread",
+        });
+      });
+      itemsCache = items;
+    }
+
+    function applyFilter() {
+      const filtered = activeStatus === "all"
+        ? itemsCache
+        : itemsCache.filter((item) => item.status === activeStatus);
+      const totalItems = filtered.length;
+      const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const start = (currentPage - 1) * pageSize;
+      const pageItems = filtered.slice(start, start + pageSize);
+      renderList(pageItems);
+      renderPagination(totalItems);
+    }
+
+    function setActiveFilter(status) {
+      activeStatus = status || "all";
+      currentPage = 1;
+      filterButtons.forEach((btn) => {
+        btn.classList.toggle("active", btn.getAttribute("data-status") === activeStatus);
+      });
+      applyFilter();
+    }
+
+    function showError(show) {
+      if (!errorEl) return;
+      if (show) errorEl.classList.remove("d-none");
+      else errorEl.classList.add("d-none");
+    }
+
+    function showErrorText(message) {
+      if (!errorEl) return;
+      errorEl.textContent = message || "Iltimos, kitob ma'lumotlarini to‘g‘ri kiriting.";
+      errorEl.classList.remove("d-none");
+    }
+
+    function refreshList() {
+      const q = (searchInput && searchInput.value) ? searchInput.value.trim() : "";
+      const url = q ? `${listUrl}?library_q=${encodeURIComponent(q)}` : listUrl;
+      return fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } })
+        .then((resp) => resp.json())
+        .then((data) => {
+          renderCounts(data.counts || {});
+          itemsCache = data.items || [];
+          applyFilter();
+        });
+    }
+
+    if (addForm) {
+      addForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        showError(false);
+        const formData = new FormData(addForm);
+        const q = (searchInput && searchInput.value) ? searchInput.value.trim() : "";
+        if (q) formData.append("library_q", q);
+        fetch(addForm.action, {
+          method: "POST",
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            "X-CSRFToken": getCookie("csrftoken"),
+          },
+          body: formData,
+        })
+          .then((resp) => {
+            if (!resp.ok) return resp.json().then((data) => Promise.reject(data));
+            return resp.json();
+          })
+          .then((data) => {
+            renderCounts(data.counts || {});
+            itemsCache = data.items || [];
+            applyFilter();
+            addForm.reset();
+          })
+          .catch((data) => {
+            const errs = data && data.errors ? data.errors : null;
+            if (errs && (errs.__all__ || errs.title || errs.author)) {
+              const msg = (errs.__all__ && errs.__all__[0]) || (errs.title && errs.title[0]) || (errs.author && errs.author[0]);
+              showErrorText(msg);
+            } else {
+              showError(true);
+            }
+          });
+      });
+    }
+
+    if (searchForm) {
+      searchForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        refreshList();
+      });
+    }
+
+    if (listEl) {
+      listEl.addEventListener("change", function (e) {
+        const target = e.target;
+        if (!target || target.getAttribute("data-action") !== "status") return;
+        const url = target.getAttribute("data-url");
+        const formData = new FormData();
+        formData.append("status", target.value);
+        const q = (searchInput && searchInput.value) ? searchInput.value.trim() : "";
+        if (q) formData.append("library_q", q);
+        fetch(url, {
+          method: "POST",
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            "X-CSRFToken": getCookie("csrftoken"),
+          },
+          body: formData,
+        })
+          .then((resp) => resp.json())
+          .then((data) => {
+            renderCounts(data.counts || {});
+            itemsCache = data.items || [];
+            applyFilter();
+          });
+      });
+
+      listEl.addEventListener("click", function (e) {
+        const target = e.target;
+        if (!target || target.getAttribute("data-action") !== "delete") return;
+        e.preventDefault();
+        const url = target.getAttribute("data-url");
+        const formData = new FormData();
+        const q = (searchInput && searchInput.value) ? searchInput.value.trim() : "";
+        if (q) formData.append("library_q", q);
+        fetch(url, {
+          method: "POST",
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            "X-CSRFToken": getCookie("csrftoken"),
+          },
+          body: formData,
+        })
+          .then((resp) => resp.json())
+          .then((data) => {
+            renderCounts(data.counts || {});
+            itemsCache = data.items || [];
+            applyFilter();
+          });
+      });
+    }
+
+    if (filterButtons.length) {
+      filterButtons.forEach((btn) => {
+        btn.addEventListener("click", function () {
+          setActiveFilter(btn.getAttribute("data-status"));
+        });
+      });
+      hydrateItemsFromDom();
+      setActiveFilter("all");
+    }
+  })();
+</script>
 {% endblock %}

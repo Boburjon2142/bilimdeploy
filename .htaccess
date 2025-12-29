@@ -1,1 +1,5 @@
 PassengerEnabled on
+# cPanel/Passenger (public_html) sample:
+# PassengerAppRoot /home/<cpanel_user>/bilimdeploy
+# PassengerBaseURI /
+# PassengerPython /home/<cpanel_user>/virtualenv/bilimdeploy/3.12/bin/python

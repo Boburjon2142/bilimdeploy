@@ -75,7 +75,11 @@ ASGI_APPLICATION = "config.asgi.application"
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL:
     parsed = urlparse(DATABASE_URL)
-    ENGINE = "django.db.backends.postgresql"
+    scheme = (parsed.scheme or "").lower()
+    if scheme in {"mysql", "mysql2"}:
+        ENGINE = "django.db.backends.mysql"
+    else:
+        ENGINE = "django.db.backends.postgresql"
     DATABASES = {
         "default": {
             "ENGINE": ENGINE,
