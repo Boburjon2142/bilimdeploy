@@ -28,6 +28,107 @@ LIST_TTL = 60 * 10  # 10 minutes; bestseller/recommended lists are stable
 CATEGORY_TTL = 60 * 15  # 15 minutes; taxonomy changes rarely
 
 
+_LATIN_TO_CYR = {
+    "o'": "ў",
+    "g'": "ғ",
+    "sh": "ш",
+    "ch": "ч",
+    "ya": "я",
+    "yo": "ё",
+    "yu": "ю",
+    "a": "а",
+    "b": "б",
+    "d": "д",
+    "e": "е",
+    "f": "ф",
+    "g": "г",
+    "h": "ҳ",
+    "i": "и",
+    "j": "ж",
+    "k": "к",
+    "l": "л",
+    "m": "м",
+    "n": "н",
+    "o": "о",
+    "p": "п",
+    "q": "қ",
+    "r": "р",
+    "s": "с",
+    "t": "т",
+    "u": "у",
+    "v": "в",
+    "x": "х",
+    "y": "й",
+    "z": "з",
+}
+_CYR_TO_LAT = {
+    "ў": "o'",
+    "ғ": "g'",
+    "ш": "sh",
+    "ч": "ch",
+    "я": "ya",
+    "ё": "yo",
+    "ю": "yu",
+    "а": "a",
+    "б": "b",
+    "д": "d",
+    "е": "e",
+    "ф": "f",
+    "г": "g",
+    "ҳ": "h",
+    "и": "i",
+    "ж": "j",
+    "к": "k",
+    "л": "l",
+    "м": "m",
+    "н": "n",
+    "о": "o",
+    "п": "p",
+    "қ": "q",
+    "р": "r",
+    "с": "s",
+    "т": "t",
+    "у": "u",
+    "в": "v",
+    "х": "x",
+    "й": "y",
+    "з": "z",
+    "ь": "",
+    "ъ": "",
+}
+
+
+def _to_cyrillic(text: str) -> str:
+    value = text.lower()
+    result = []
+    i = 0
+    while i < len(value):
+        pair = value[i : i + 2]
+        if pair in _LATIN_TO_CYR:
+            result.append(_LATIN_TO_CYR[pair])
+            i += 2
+            continue
+        ch = value[i]
+        result.append(_LATIN_TO_CYR.get(ch, ch))
+        i += 1
+    return "".join(result)
+
+
+def _to_latin(text: str) -> str:
+    value = text.lower()
+    result = []
+    for ch in value:
+        result.append(_CYR_TO_LAT.get(ch, ch))
+    return "".join(result)
+
+
+def _build_search_variants(query: str) -> list:
+    variants = {query}
+    variants.add(_to_cyrillic(query))
+    variants.add(_to_latin(query))
+    return [v for v in variants if v]
+
+
 @cache_page(60 * 5)  # 5 minutes
 def home(request):
     lang = get_language() or getattr(settings, "LANGUAGE_CODE", "default")
@@ -248,6 +349,7 @@ def search(request):
         return None if v in [None, "", "None", "null"] else v
 
     query = request.GET.get("q", "").strip()
+    variants = _build_search_variants(query) if query else []
 
     # Normalize GET params
     author_id = normalize(request.GET.get("author"))
@@ -276,11 +378,12 @@ def search(request):
     )
 
     if query:
-        books = Book.objects.filter(
-            Q(title__icontains=query)
-            | Q(author__name__icontains=query)
-            | Q(category__name__icontains=query)
-        ).select_related("author", "category")
+        q_filter = Q()
+        for term in variants:
+            q_filter |= Q(title__icontains=term)
+            q_filter |= Q(author__name__icontains=term)
+            q_filter |= Q(category__name__icontains=term)
+        books = Book.objects.filter(q_filter).select_related("author", "category")
 
         # Filter by author
         if author_id:
