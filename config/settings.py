@@ -21,6 +21,11 @@ CSRF_TRUSTED_ORIGINS = [
     ).split(",")
     if origin.strip()
 ]
+_cors_origins = os.getenv(
+    "DJANGO_CORS_ALLOWED_ORIGINS",
+    "https://bilimstore.uz,https://www.bilimstore.uz",
+)
+CORS_ALLOWED_ORIGINS = [origin.strip() for origin in _cors_origins.split(",") if origin.strip()]
 
 # --- Applications ---
 INSTALLED_APPS = [
@@ -40,6 +45,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.gzip.GZipMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "config.middleware.SimpleCorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",

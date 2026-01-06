@@ -1,9 +1,11 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Q, F
+from django.http import JsonResponse
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.core.cache import cache
 from django.views.decorators.cache import cache_page
+from django.views.decorators.http import require_GET
 from django.conf import settings
 from django.utils.translation import get_language
 from .models import Category, Book, Author, Banner, FeaturedCategory
@@ -127,6 +129,91 @@ def _build_search_variants(query: str) -> list:
     variants.add(_to_cyrillic(query))
     variants.add(_to_latin(query))
     return [v for v in variants if v]
+
+
+def _abs_media_url(request, field):
+    if not field:
+        return None
+    try:
+        url = field.url
+    except Exception:
+        return None
+    return request.build_absolute_uri(url)
+
+
+def _serialize_category(category):
+    return {
+        "id": category.id,
+        "name": category.name,
+        "slug": category.slug,
+        "parent_id": category.parent_id,
+    }
+
+
+def _serialize_author(request, author):
+    return {
+        "id": author.id,
+        "name": author.name,
+        "bio": author.bio,
+        "is_featured": author.is_featured,
+        "photo": _abs_media_url(request, author.photo),
+    }
+
+
+def _serialize_banner(request, banner):
+    return {
+        "id": banner.id,
+        "title": banner.title,
+        "image": _abs_media_url(request, banner.image),
+        "link": banner.link,
+        "order": banner.order,
+        "is_active": banner.is_active,
+    }
+
+
+def _serialize_book(request, book):
+    return {
+        "id": book.id,
+        "title": book.title,
+        "slug": book.slug,
+        "description": book.description,
+        "purchase_price": str(book.purchase_price),
+        "sale_price": str(book.sale_price),
+        "stock_quantity": book.stock_quantity,
+        "book_format": book.book_format,
+        "pages": book.pages,
+        "is_recommended": book.is_recommended,
+        "views": book.views,
+        "created_at": book.created_at.isoformat(),
+        "cover_image": _abs_media_url(request, book.cover_image),
+        "author": {
+            "id": book.author_id,
+            "name": book.author.name,
+        },
+        "category": {
+            "id": book.category_id,
+            "name": book.category.name,
+            "slug": book.category.slug,
+        },
+    }
+
+
+def _get_pagination(request, default_limit=20, max_limit=100):
+    try:
+        limit = int(request.GET.get("limit", default_limit))
+    except (TypeError, ValueError):
+        limit = default_limit
+    try:
+        offset = int(request.GET.get("offset", 0))
+    except (TypeError, ValueError):
+        offset = 0
+    if limit <= 0:
+        limit = default_limit
+    if limit > max_limit:
+        limit = max_limit
+    if offset < 0:
+        offset = 0
+    return limit, offset
 
 
 @cache_page(60 * 5)  # 5 minutes
@@ -469,3 +556,200 @@ def remove_favorite(request, book_id):
     if referer and url_has_allowed_host_and_scheme(referer, allowed_hosts={request.get_host()}):
         return redirect(referer)
     return redirect("favorites")
+
+
+@require_GET
+def api_home(request):
+    lang = get_language() or getattr(settings, "LANGUAGE_CODE", "default")
+    categories = cache.get_or_set(
+        home_top_categories_key(lang),
+        lambda: list(Category.objects.filter(parent__isnull=True)[:4]),
+        HOME_TTL,
+    )
+    authors = cache.get_or_set(
+        home_featured_authors_key(lang),
+        lambda: list(Author.objects.filter(is_featured=True)[:10]),
+        HOME_TTL,
+    )
+    banners = cache.get_or_set(
+        home_banners_key(lang),
+        lambda: list(
+            Banner.objects.filter(is_active=True)
+            .order_by("order", "-created_at")
+            .select_related(None)[:5]
+        ),
+        HOME_TTL,
+    )
+    featured_cfgs = cache.get_or_set(
+        home_featured_cfgs_key(lang),
+        lambda: list(
+            FeaturedCategory.objects.filter(is_active=True)
+            .select_related("category")
+        ),
+        HOME_TTL,
+    )
+    featured_sections = []
+    for cfg in featured_cfgs:
+        limit = cfg.limit or 10
+        books_key = home_featured_books_key(cfg.category_id, limit, lang)
+        books = cache.get_or_set(
+            books_key,
+            lambda: list(
+                Book.objects.filter(category=cfg.category)
+                .select_related("author", "category")
+                .order_by("-created_at")[:limit]
+            ),
+            HOME_TTL,
+        )
+        featured_sections.append(
+            {
+                "title": cfg.title or cfg.category.name,
+                "category": _serialize_category(cfg.category),
+                "books": [_serialize_book(request, book) for book in books],
+            }
+        )
+    best_selling = cache.get_or_set(
+        home_best_selling_key(lang),
+        lambda: list(
+            Book.objects.select_related("author", "category")
+            .order_by("-views")[:6]
+        ),
+        LIST_TTL,
+    )
+    new_books = cache.get_or_set(
+        home_new_books_key(lang),
+        lambda: list(
+            Book.objects.select_related("author", "category")
+            .order_by("-created_at")[:6]
+        ),
+        HOME_TTL,
+    )
+    recommended = cache.get_or_set(
+        home_recommended_key(lang),
+        lambda: list(
+            Book.objects.filter(is_recommended=True)
+            .select_related("author", "category")
+            .order_by("-created_at")[:6]
+        ),
+        LIST_TTL,
+    )
+    data = {
+        "categories": [_serialize_category(category) for category in categories],
+        "authors": [_serialize_author(request, author) for author in authors],
+        "banners": [_serialize_banner(request, banner) for banner in banners],
+        "featured_sections": featured_sections,
+        "best_selling": [_serialize_book(request, book) for book in best_selling],
+        "new_books": [_serialize_book(request, book) for book in new_books],
+        "recommended": [_serialize_book(request, book) for book in recommended],
+    }
+    return JsonResponse(data)
+
+
+@require_GET
+def api_categories(request):
+    categories = list(Category.objects.all().order_by("name"))
+    by_id = {
+        category.id: {**_serialize_category(category), "children": []}
+        for category in categories
+    }
+    roots = []
+    for category in categories:
+        payload = by_id[category.id]
+        if category.parent_id and category.parent_id in by_id:
+            by_id[category.parent_id]["children"].append(payload)
+        else:
+            roots.append(payload)
+    return JsonResponse({"items": roots})
+
+
+@require_GET
+def api_authors(request):
+    authors = Author.objects.all().order_by("name")
+    return JsonResponse({"items": [_serialize_author(request, author) for author in authors]})
+
+
+@require_GET
+def api_books(request):
+    qs = Book.objects.select_related("author", "category").all()
+    query = request.GET.get("q", "").strip()
+    if query:
+        variants = _build_search_variants(query)
+        q_filter = Q()
+        for term in variants:
+            q_filter |= Q(title__icontains=term)
+            q_filter |= Q(author__name__icontains=term)
+            q_filter |= Q(category__name__icontains=term)
+        qs = qs.filter(q_filter)
+
+    category = request.GET.get("category")
+    if category:
+        if category.isdigit():
+            qs = qs.filter(category_id=int(category))
+        else:
+            qs = qs.filter(category__slug=category)
+
+    author = request.GET.get("author")
+    if author and author.isdigit():
+        qs = qs.filter(author_id=int(author))
+
+    sort = request.GET.get("sort")
+    sort_map = {
+        "price_asc": "sale_price",
+        "price_desc": "-sale_price",
+        "newest": "-created_at",
+        "oldest": "created_at",
+        "popular": "-views",
+        "alpha_asc": "title",
+        "alpha_desc": "-title",
+    }
+    if sort in sort_map:
+        qs = qs.order_by(sort_map[sort])
+
+    total = qs.count()
+    limit, offset = _get_pagination(request, default_limit=20, max_limit=100)
+    items = qs[offset : offset + limit]
+    data = {
+        "count": total,
+        "limit": limit,
+        "offset": offset,
+        "items": [_serialize_book(request, book) for book in items],
+    }
+    return JsonResponse(data)
+
+
+@require_GET
+def api_book_detail(request, id):
+    book = get_object_or_404(Book.objects.select_related("author", "category"), id=id)
+    Book.objects.filter(id=book.id).update(views=F("views") + 1)
+    similar_books = (
+        Book.objects.filter(category=book.category)
+        .exclude(id=book.id)
+        .select_related("author", "category")
+        .order_by("-views")[:10]
+    )
+    data = {
+        "book": _serialize_book(request, book),
+        "similar": [_serialize_book(request, item) for item in similar_books],
+    }
+    return JsonResponse(data)
+
+
+@require_GET
+def api_about(request):
+    from .models import AboutPage
+
+    about_page = (
+        AboutPage.objects.filter(is_active=True)
+        .order_by("-updated_at", "-id")
+        .first()
+    )
+    data = None
+    if about_page:
+        data = {
+            "title": about_page.title,
+            "body": about_page.body,
+            "link": about_page.link,
+            "image": _abs_media_url(request, about_page.image),
+            "updated_at": about_page.updated_at.isoformat(),
+        }
+    return JsonResponse({"item": data})

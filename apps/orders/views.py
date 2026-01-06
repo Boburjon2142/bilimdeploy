@@ -1,4 +1,5 @@
 from decimal import Decimal
+import json
 
 from django.conf import settings
 from django.utils import timezone
@@ -7,6 +8,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.urls import reverse
 from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.dateparse import parse_time
 from django.db import transaction
 
 from apps.catalog.models import Book
@@ -166,3 +169,131 @@ def delivery_quote(request):
         "zone_message": (tmp_order.delivery_pricing_snapshot or {}).get("zone_message"),
     }
     return JsonResponse(data)
+
+
+@csrf_exempt
+@require_POST
+def api_create_order(request):
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "invalid_json"}, status=400)
+
+    items = payload.get("items") or []
+    if not isinstance(items, list) or not items:
+        return JsonResponse({"error": "items_required"}, status=400)
+
+    full_name = (payload.get("full_name") or "").strip()
+    phone = (payload.get("phone") or "").strip()
+    address = (payload.get("address") or "").strip()
+    if not full_name or not phone or not address:
+        return JsonResponse({"error": "missing_required_fields"}, status=400)
+
+    payment_type = payload.get("payment_type") or "cash"
+    valid_payments = {choice[0] for choice in Order.PAYMENT_CHOICES}
+    if payment_type not in valid_payments:
+        return JsonResponse({"error": "invalid_payment_type"}, status=400)
+
+    order = Order(
+        full_name=full_name,
+        phone=phone,
+        extra_phone=(payload.get("extra_phone") or "").strip(),
+        location=(payload.get("location") or "").strip(),
+        address_text=(payload.get("address_text") or "").strip(),
+        address=address,
+        note=(payload.get("note") or "").strip(),
+        payment_type=payment_type,
+        status="new",
+        order_source=(payload.get("order_source") or "app").strip() or "app",
+        delivery_time_choice=payload.get("delivery_time_choice") or "now",
+    )
+
+    if "latitude" in payload:
+        try:
+            order.latitude = Decimal(str(payload.get("latitude")))
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "invalid_latitude"}, status=400)
+    if "longitude" in payload:
+        try:
+            order.longitude = Decimal(str(payload.get("longitude")))
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "invalid_longitude"}, status=400)
+
+    if order.delivery_time_choice == "schedule":
+        delivery_time = parse_time(payload.get("delivery_time") or "")
+        if delivery_time:
+            order.delivery_time = delivery_time
+
+    item_payloads = []
+    book_ids = []
+    for item in items:
+        if not isinstance(item, dict):
+            return JsonResponse({"error": "invalid_item"}, status=400)
+        try:
+            book_id = int(item.get("book_id"))
+            quantity = int(item.get("quantity", 1))
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "invalid_item"}, status=400)
+        if book_id <= 0 or quantity <= 0:
+            return JsonResponse({"error": "invalid_item"}, status=400)
+        book_ids.append(book_id)
+        item_payloads.append({"book_id": book_id, "quantity": quantity})
+
+    books = Book.objects.in_bulk(book_ids)
+    missing = [book_id for book_id in book_ids if book_id not in books]
+    if missing:
+        return JsonResponse({"error": "book_not_found", "missing": missing}, status=404)
+
+    total = Decimal("0")
+    for item in item_payloads:
+        book = books[item["book_id"]]
+        total += book.sale_price * item["quantity"]
+
+    discount_percent = payload.get("discount_percent")
+    discount_amount = payload.get("discount_amount")
+    discount_percent_value = 0
+    discount_amount_value = Decimal("0")
+    if discount_percent is not None:
+        try:
+            discount_percent_value = int(discount_percent)
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "invalid_discount_percent"}, status=400)
+        if discount_percent_value < 0 or discount_percent_value > 100:
+            return JsonResponse({"error": "invalid_discount_percent"}, status=400)
+        discount_amount_value = (total * Decimal(discount_percent_value)) / Decimal("100")
+    elif discount_amount is not None:
+        try:
+            discount_amount_value = Decimal(str(discount_amount))
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "invalid_discount_amount"}, status=400)
+        if discount_amount_value < 0:
+            return JsonResponse({"error": "invalid_discount_amount"}, status=400)
+
+    order.subtotal_before_discount = total
+    order.discount_percent = discount_percent_value
+    order.discount_amount = discount_amount_value
+    order.total_price = max(Decimal("0"), total - discount_amount_value)
+
+    with transaction.atomic():
+        order = recalculate_delivery(order, save=False)
+        order.save()
+        for item in item_payloads:
+            book = books[item["book_id"]]
+            OrderItem.objects.create(
+                order=order,
+                book=book,
+                quantity=item["quantity"],
+                price=book.sale_price,
+            )
+
+    data = {
+        "id": order.id,
+        "status": order.status,
+        "total_price": str(order.total_price),
+        "subtotal_before_discount": str(order.subtotal_before_discount),
+        "discount_percent": order.discount_percent,
+        "discount_amount": str(order.discount_amount),
+        "delivery_fee": order.delivery_fee,
+        "delivery_distance_km": str(order.delivery_distance_km or 0),
+    }
+    return JsonResponse(data, status=201)
