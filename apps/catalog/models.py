@@ -70,7 +70,13 @@ class Book(models.Model):
     slug = models.SlugField("Slug", unique=True)
     category = models.ForeignKey(Category, verbose_name="Kategoriya", on_delete=models.CASCADE, related_name="books")
     author = models.ForeignKey(Author, verbose_name="Muallif", on_delete=models.CASCADE, related_name="books")
-    purchase_price = models.DecimalField("Sotib olish narxi", max_digits=8, decimal_places=0)
+    purchase_price = models.DecimalField(
+        "Sotib olish narxi",
+        max_digits=8,
+        decimal_places=0,
+        null=True,
+        blank=True,
+    )
     sale_price = models.DecimalField("Sotish narxi", max_digits=8, decimal_places=0)
     stock_quantity = models.PositiveIntegerField("Ombordagi soni", default=0)
     description = models.TextField("Tavsif", blank=True)
