@@ -123,8 +123,12 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
-# Use non-manifest storage to avoid bootstrap errors before collectstatic.
-STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
+# Use manifest storage in production for long-term caching; keep non-manifest in dev.
+if DEBUG:
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
+else:
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    WHITENOISE_MAX_AGE = 31536000
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -143,7 +147,10 @@ elif _redis_url:
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
             "LOCATION": _redis_url,
-            "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "IGNORE_EXCEPTIONS": True,
+            },
             "TIMEOUT": None,
         }
     }
@@ -193,6 +200,22 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 0
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "profile"
 LOGOUT_REDIRECT_URL = "home"
+
+# Cache template loading and sessions in production when Redis is available.
+if not DEBUG:
+    TEMPLATES[0]["APP_DIRS"] = False
+    TEMPLATES[0]["OPTIONS"]["loaders"] = [
+        (
+            "django.template.loaders.cached.Loader",
+            [
+                "django.template.loaders.filesystem.Loader",
+                "django.template.loaders.app_directories.Loader",
+            ],
+        )
+    ]
+    if _redis_url:
+        SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
+        SESSION_CACHE_ALIAS = "default"
 
 SHOP_LAT = float(os.getenv("SHOP_LAT", "41.2995"))
 SHOP_LNG = float(os.getenv("SHOP_LNG", "69.2401"))

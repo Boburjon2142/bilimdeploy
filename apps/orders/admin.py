@@ -2,7 +2,6 @@ from django.contrib import admin, messages
 from django.utils.html import format_html
 
 from django import forms
-from django.templatetags.static import static
 
 from .models import DeliveryNotice, DeliveryZone, Order, OrderItem, DeliverySettings
 from .services.delivery import (
@@ -85,7 +84,7 @@ class DeliverySettingsForm(forms.ModelForm):
         }
         js = (
             "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
-            static("orders/admin_shop_origin.js"),
+            "orders/admin_shop_origin.js",
         )
 
 

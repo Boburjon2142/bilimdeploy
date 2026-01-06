@@ -216,7 +216,7 @@ def _get_pagination(request, default_limit=20, max_limit=100):
     return limit, offset
 
 
-@cache_page(60 * 5)  # 5 minutes
+@cache_page(HOME_TTL)
 def home(request):
     lang = get_language() or getattr(settings, "LANGUAGE_CODE", "default")
     # Cache only public, non-user-specific content to reduce DB hits.
@@ -307,6 +307,7 @@ def home(request):
     )
 
 
+@cache_page(CATEGORY_TTL)
 def categories_list(request):
     lang = get_language() or getattr(settings, "LANGUAGE_CODE", "default")
     categories = cache.get_or_set(
@@ -317,11 +318,13 @@ def categories_list(request):
     return render(request, "categories_list.html", {"categories": categories})
 
 
+@cache_page(CATEGORY_TTL)
 def authors_list(request):
     authors = Author.objects.all().order_by("name")
     return render(request, "authors_list.html", {"authors": authors})
 
 
+@cache_page(CATEGORY_TTL)
 def about(request):
     from .models import AboutPage
 
@@ -333,11 +336,13 @@ def about(request):
     return render(request, "about.html", {"about_page": about_page})
 
 
+@cache_page(HOME_TTL)
 def new_books_list(request):
     books = Book.objects.order_by("-created_at")
     return render(request, "book_list.html", {"title": "Yangi qo‘shilganlar", "books": books})
 
 
+@cache_page(LIST_TTL)
 def best_selling_list(request):
     lang = get_language() or getattr(settings, "LANGUAGE_CODE", "default")
     # Safe to cache: same for every user, changes only when sales/views change.
@@ -349,6 +354,7 @@ def best_selling_list(request):
     return render(request, "book_list.html", {"title": "Eng ko‘p sotilganlar", "books": books})
 
 
+@cache_page(LIST_TTL)
 def recommended_list(request):
     lang = get_language() or getattr(settings, "LANGUAGE_CODE", "default")
     # Safe to cache: recommendation flag is content-based, not user-based.
@@ -558,6 +564,7 @@ def remove_favorite(request, book_id):
     return redirect("favorites")
 
 
+@cache_page(HOME_TTL)
 @require_GET
 def api_home(request):
     lang = get_language() or getattr(settings, "LANGUAGE_CODE", "default")
@@ -645,6 +652,7 @@ def api_home(request):
     return JsonResponse(data)
 
 
+@cache_page(CATEGORY_TTL)
 @require_GET
 def api_categories(request):
     categories = list(Category.objects.all().order_by("name"))
@@ -662,12 +670,14 @@ def api_categories(request):
     return JsonResponse({"items": roots})
 
 
+@cache_page(CATEGORY_TTL)
 @require_GET
 def api_authors(request):
     authors = Author.objects.all().order_by("name")
     return JsonResponse({"items": [_serialize_author(request, author) for author in authors]})
 
 
+@cache_page(LIST_TTL)
 @require_GET
 def api_books(request):
     qs = Book.objects.select_related("author", "category").all()
@@ -734,6 +744,7 @@ def api_book_detail(request, id):
     return JsonResponse(data)
 
 
+@cache_page(CATEGORY_TTL)
 @require_GET
 def api_about(request):
     from .models import AboutPage
