@@ -3,6 +3,8 @@ import re
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 
 from .models import LibraryBook
 
@@ -37,6 +39,7 @@ class PhoneUserCreationForm(UserCreationForm):
         if User.objects.filter(username=phone).exists():
             raise forms.ValidationError("Bu telefon raqam bilan akkaunt mavjud.")
         return phone
+
 
     def save(self, commit=True):
         user = super().save(commit=False)
@@ -84,3 +87,68 @@ class LibraryBookForm(forms.ModelForm):
         if not author:
             raise forms.ValidationError("Muallifni kiriting.")
         return author
+
+
+class TelegramOtpForm(forms.Form):
+    code = forms.CharField(
+        label="Tasdiqlash kodi",
+        max_length=6,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "6 xonali kod"}),
+    )
+
+    def clean_code(self):
+        code = (self.cleaned_data.get("code") or "").strip()
+        if not code.isdigit() or len(code) != 6:
+            raise forms.ValidationError("Kod 6 xonali bo'lishi kerak.")
+        return code
+
+
+class PasswordResetRequestForm(forms.Form):
+    phone = forms.CharField(
+        label="Telefon",
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "+998 90 123 45 67"}),
+    )
+
+    def clean_phone(self):
+        phone = normalize_phone(self.cleaned_data.get("phone", ""))
+        if len(phone) < 7:
+            raise forms.ValidationError("Telefon raqam noto'g'ri.")
+        return phone
+
+
+
+class PasswordResetConfirmForm(forms.Form):
+    code = forms.CharField(
+        label="Tasdiqlash kodi",
+        max_length=6,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "6 xonali kod"}),
+    )
+    password1 = forms.CharField(
+        label="Yangi parol",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"class": "form-control", "placeholder": "Yangi parol"}),
+    )
+    password2 = forms.CharField(
+        label="Yangi parolni tasdiqlang",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"class": "form-control", "placeholder": "Parolni tasdiqlang"}),
+    )
+
+    def clean_code(self):
+        code = (self.cleaned_data.get("code") or "").strip()
+        if not code.isdigit() or len(code) != 6:
+            raise forms.ValidationError("Kod 6 xonali bo'lishi kerak.")
+        return code
+
+    def clean(self):
+        cleaned = super().clean()
+        p1 = cleaned.get("password1")
+        p2 = cleaned.get("password2")
+        if p1 and p2 and p1 != p2:
+            self.add_error("password2", "Parollar mos emas.")
+        if p1:
+            try:
+                validate_password(p1)
+            except ValidationError as exc:
+                self.add_error("password1", exc)
+        return cleaned

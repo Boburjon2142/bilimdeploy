@@ -26,19 +26,11 @@ def _get_chat_ids() -> List[str]:
     return [part.strip() for part in raw.split(",") if part.strip()]
 
 
-def _send_telegram_message(text: str) -> None:
-    """
-    Sends plain-text message to Telegram via Bot API.
-    No-op unless TELEGRAM_SEND_ORDERS=true and both token + chat id(s) are set.
-    """
-    if not _env_bool("TELEGRAM_SEND_ORDERS", default=False):
-        return
-
+def _send_telegram_message_to(text: str, chat_ids: List[str]) -> None:
     token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
-    chat_ids = _get_chat_ids()
     if not token or not chat_ids:
         logger.error(
-            "Telegram is enabled but TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing (token=%s, chat_ids=%s).",
+            "Telegram is enabled but TELEGRAM_BOT_TOKEN or chat ids are missing (token=%s, chat_ids=%s).",
             "set" if token else "missing",
             "set" if chat_ids else "missing",
         )
@@ -72,9 +64,54 @@ def _send_telegram_message(text: str) -> None:
             logger.exception("Telegram sendMessage error (chat_id=%s)", chat_id)
 
 
+def _send_telegram_message(text: str) -> None:
+    """
+    Sends plain-text message to Telegram via Bot API.
+    No-op unless TELEGRAM_SEND_ORDERS=true and both token + chat id(s) are set.
+    """
+    if not _env_bool("TELEGRAM_SEND_ORDERS", default=False):
+        return
+
+    chat_ids = _get_chat_ids()
+    if not chat_ids:
+        logger.error(
+            "Telegram is enabled but TELEGRAM_CHAT_ID is missing (chat_ids=%s).",
+            "set" if chat_ids else "missing",
+        )
+        return
+
+    _send_telegram_message_to(text, chat_ids)
+
+
 def send_message(text: str) -> None:
     """Public wrapper for sending a plain Telegram message (uses same env toggles)."""
     _send_telegram_message(text)
+
+
+def send_otp(chat_id: str, code: str, purpose: str, ttl_seconds: int) -> None:
+    """
+    Send OTP message to a specific chat id.
+    Controlled by TELEGRAM_SEND_OTP env toggle.
+    """
+    if not _env_bool("TELEGRAM_SEND_OTP", default=False):
+        return
+    if not chat_id:
+        return
+    ttl_minutes = max(int(ttl_seconds / 60), 1)
+    text = (
+        "<b>Tasdiqlash kodi</b>\n"
+        f"Kod: <b>{html_escape(code)}</b>\n"
+        f"Maqsad: {html_escape(purpose)}\n"
+        f"Amal qilish muddati: {ttl_minutes} daqiqa"
+    )
+    _send_telegram_message_to(text, [str(chat_id)])
+
+
+def send_bot_message(chat_id: str, text: str) -> None:
+    """Send a direct bot message to a single chat id (used for webhook replies)."""
+    if not chat_id:
+        return
+    _send_telegram_message_to(text, [str(chat_id)])
 
 
 def _format_money_uzs(value) -> str:

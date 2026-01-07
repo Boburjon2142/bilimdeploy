@@ -10,9 +10,9 @@ class LibraryBook(models.Model):
     STATUS_FINISHED = "finished"
 
     STATUS_CHOICES = [
-        (STATUS_UNREAD, "O‘qilmagan"),
-        (STATUS_READING, "O‘qilmoqda"),
-        (STATUS_FINISHED, "O‘qilgan"),
+        (STATUS_UNREAD, "O'qilmagan"),
+        (STATUS_READING, "O'qilmoqda"),
+        (STATUS_FINISHED, "O'qilgan"),
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="library_books")
@@ -33,12 +33,26 @@ class LibraryBook(models.Model):
         verbose_name_plural = "Kutubxona kitoblari"
 
     def __str__(self):
-        return f"{self.title} — {self.author}"
+        return f"{self.title} - {self.author}"
 
     def save(self, *args, **kwargs):
         self.title = (self.title or "").strip()
         self.author = (self.author or "").strip()
         super().save(*args, **kwargs)
+
+
+class TelegramProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="telegram_profile")
+    chat_id = models.CharField(max_length=64, unique=True)
+    is_verified = models.BooleanField(default=True)
+    verified_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Telegram profili"
+        verbose_name_plural = "Telegram profillari"
+
+    def __str__(self):
+        return f"{self.user} - {self.chat_id}"
 
 
 class LibraryLimit(models.Model):
@@ -51,4 +65,4 @@ class LibraryLimit(models.Model):
         verbose_name_plural = "Kutubxona limitlari"
 
     def __str__(self):
-        return f"{self.user} — {self.limit}"
+        return f"{self.user} - {self.limit}"

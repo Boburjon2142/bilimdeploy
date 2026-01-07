@@ -4,7 +4,11 @@ from . import views
 
 urlpatterns = [
     path("register/", views.register, name="register"),
+    path("register/verify/", views.register_verify, name="register_verify"),
     path("login/", views.login_view, name="login"),
+    path("password/reset/", views.password_reset_request, name="password_reset_request"),
+    path("password/reset/confirm/", views.password_reset_confirm, name="password_reset_confirm"),
+    path("telegram/webhook/<str:token>/", views.telegram_webhook, name="telegram_webhook"),
     path("logout/", views.logout_view, name="logout"),
     path("profile/", views.profile, name="profile"),
     path("library/add/", views.library_add, name="library_add"),

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="px-3 py-3">
+  <h4 class="fw-bold mb-3">Tasdiqlash kodi</h4>
+  <div class="text-muted small mb-3">Kod Telegram botdan yuborildi: {{ phone }}</div>
+  {% if needs_link and telegram_bot_username %}
+  <div class="mb-3">
+    <a id="tg-start-link" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">
+      Kod olish
+    </a>
+    <div class="text-muted small mt-2">Tugma botga yo'naltiradi va kod yuboriladi.</div>
+  </div>
+  {% endif %}
+  <form method="post" class="card border-0 shadow-sm p-3" style="border-radius:16px;">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger py-2">
+      {% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
+    </div>
+    {% endif %}
+    <div class="mb-3">
+      <label class="form-label">Tasdiqlash kodi</label>
+      {{ form.code }}
+      {% if form.code.errors %}<div class="text-danger small">{{ form.code.errors|striptags }}</div>{% endif %}
+    </div>
+    <button class="btn btn-primary w-100" type="submit">Tasdiqlash</button>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if needs_link and telegram_bot_username %}
+<script>
+  (function () {
+    const link = document.getElementById("tg-start-link");
+    if (!link) return;
+    const base = "https://t.me/{{ telegram_bot_username }}";
+    const phone = "{{ phone }}";
+    link.href = `${base}?start=${encodeURIComponent(phone)}`;
+  })();
+</script>
+{% endif %}
+{% endblock %}
