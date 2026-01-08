@@ -61,7 +61,7 @@
             {% for author in authors %}
             <a class="author-chip text-decoration-none" href="{% url 'author_detail' author.id %}">
                 {% if author.photo %}
-                <img src="{{ author.photo.url }}" alt="{{ author.name }}">
+                <img src="{{ author.photo.url }}" alt="{{ author.name }}" loading="lazy">
                 {% else %}
                 <div class="rounded-circle d-flex align-items-center justify-content-center bg-light mx-auto" style="width:70px;height:70px;font-weight:700;color:#111;">
                     {{ author.name|slice:":2" }}
@@ -85,9 +85,9 @@
         {% for book in section.books %}
         <div class="book-strip-card">
             {% if book.cover_image %}
-            <img src="{{ book.cover_image.url }}" alt="{{ book.title }}">
+            <img src="{{ book.cover_image.url }}" alt="{{ book.title }}" loading="lazy">
             {% else %}
-            <img src="https://via.placeholder.com/420x240?text=Rasm+yo%27q" alt="{{ book.title }}">
+            <img src="https://via.placeholder.com/420x240?text=Rasm+yo%27q" alt="{{ book.title }}" loading="lazy">
             {% endif %}
             <div class="meta">
                 <p class="title">{{ book.title }}</p>
@@ -109,9 +109,9 @@
         {% for book in new_books %}
         <div class="book-strip-card">
             {% if book.cover_image %}
-            <img src="{{ book.cover_image.url }}" alt="{{ book.title }}">
+            <img src="{{ book.cover_image.url }}" alt="{{ book.title }}" loading="lazy">
             {% else %}
-            <img src="https://via.placeholder.com/420x240?text=Rasm+yo%27q" alt="{{ book.title }}">
+            <img src="https://via.placeholder.com/420x240?text=Rasm+yo%27q" alt="{{ book.title }}" loading="lazy">
             {% endif %}
             <div class="meta">
                 <p class="title">{{ book.title }}</p>
@@ -132,9 +132,9 @@
         {% for book in best_selling %}
         <div class="book-strip-card">
             {% if book.cover_image %}
-            <img src="{{ book.cover_image.url }}" alt="{{ book.title }}">
+            <img src="{{ book.cover_image.url }}" alt="{{ book.title }}" loading="lazy">
             {% else %}
-            <img src="https://via.placeholder.com/420x240?text=Rasm+yo%27q" alt="{{ book.title }}">
+            <img src="https://via.placeholder.com/420x240?text=Rasm+yo%27q" alt="{{ book.title }}" loading="lazy">
             {% endif %}
             <div class="meta">
                 <p class="title">{{ book.title }}</p>
@@ -155,9 +155,9 @@
         {% for book in recommended %}
         <div class="book-strip-card">
             {% if book.cover_image %}
-            <img src="{{ book.cover_image.url }}" alt="{{ book.title }}">
+            <img src="{{ book.cover_image.url }}" alt="{{ book.title }}" loading="lazy">
             {% else %}
-            <img src="https://via.placeholder.com/420x240?text=Rasm+yo%27q" alt="{{ book.title }}">
+            <img src="https://via.placeholder.com/420x240?text=Rasm+yo%27q" alt="{{ book.title }}" loading="lazy">
             {% endif %}
             <div class="meta">
                 <p class="title">{{ book.title }}</p>

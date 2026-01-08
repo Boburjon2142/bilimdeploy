@@ -135,14 +135,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 # --- Cache ---
 _redis_url = os.getenv("REDIS_URL") or os.getenv("DJANGO_REDIS_URL")
-if DEBUG:
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
-            "TIMEOUT": None,
-        }
-    }
-elif _redis_url:
+if _redis_url:
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
@@ -178,7 +171,7 @@ LOGGING = {
     "disable_existing_loggers": False,
     "handlers": {
         "file": {
-            "level": "ERROR",
+            "level": "INFO",
             "class": "logging.FileHandler",
             "filename": BASE_DIR / "django.log",
         },
@@ -186,7 +179,7 @@ LOGGING = {
     "loggers": {
         "django": {
             "handlers": ["file"],
-            "level": "ERROR",
+            "level": "INFO",
             "propagate": True,
         },
     },

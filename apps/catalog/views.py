@@ -338,7 +338,7 @@ def about(request):
 
 @cache_page(HOME_TTL)
 def new_books_list(request):
-    books = Book.objects.order_by("-created_at")
+    books = Book.objects.select_related("author", "category").order_by("-created_at")
     return render(request, "book_list.html", {"title": "Yangi qo‘shilganlar", "books": books})
 
 
@@ -370,12 +370,18 @@ def recommended_list(request):
     return render(request, "book_list.html", {"title": "Tavsiya etilganlar", "books": books})
 
 
+@cache_page(CATEGORY_TTL)
 def author_detail(request, author_id):
     author = get_object_or_404(Author, id=author_id)
-    books = Book.objects.filter(author=author).select_related("category").order_by("-created_at")
+    books = (
+        Book.objects.filter(author=author)
+        .select_related("author", "category")
+        .order_by("-created_at")
+    )
     return render(request, "book_list.html", {"title": author.name, "books": books})
 
 
+@cache_page(CATEGORY_TTL)
 def category_detail(request, slug):
     category = get_object_or_404(Category, slug=slug)
     descendants = category.children.all()
@@ -437,6 +443,7 @@ def book_detail(request, id, slug):
     )
 
 
+@cache_page(LIST_TTL)
 def search(request):
     def normalize(v):
         return None if v in [None, "", "None", "null"] else v

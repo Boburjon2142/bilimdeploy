@@ -92,9 +92,9 @@
         {% for item in similar_books %}
         <div class="book-strip-card">
             {% if item.cover_image %}
-            <img src="{{ item.cover_image.url }}" alt="{{ item.title }}">
+            <img src="{{ item.cover_image.url }}" alt="{{ item.title }}" loading="lazy">
             {% else %}
-            <img src="https://via.placeholder.com/420x240?text=Rasm+yo%27q" alt="{{ item.title }}">
+            <img src="https://via.placeholder.com/420x240?text=Rasm+yo%27q" alt="{{ item.title }}" loading="lazy">
             {% endif %}
             <div class="meta">
                 <p class="title">{{ item.title }}</p>

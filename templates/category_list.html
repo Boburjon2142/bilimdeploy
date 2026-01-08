@@ -62,9 +62,9 @@
     <div class="col-6 col-md-3">
         <div class="card book-card h-100">
             {% if book.cover_image %}
-                <img src="{{ book.cover_image.url }}" class="card-img-top" alt="{{ book.title }}">
+                <img src="{{ book.cover_image.url }}" class="card-img-top" alt="{{ book.title }}" loading="lazy">
                 {% else %}
-                <img src="https://via.placeholder.com/300x400?text=Rasm+yo%27q" class="card-img-top" alt="{{ book.title }}">
+                <img src="https://via.placeholder.com/300x400?text=Rasm+yo%27q" class="card-img-top" alt="{{ book.title }}" loading="lazy">
                 {% endif %}
                 <div class="p-2">
                     <div class="fw-semibold" style="font-size: 14px; line-height: 1.2;">{{ book.title }}</div>

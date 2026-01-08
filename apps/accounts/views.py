@@ -6,6 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.db.models import Count, Q
 import json
+import logging
 
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
@@ -31,6 +32,7 @@ from apps.orders.services.telegram import (
 )
 
 User = get_user_model()
+logger = logging.getLogger("django")
 
 OTP_PURPOSE_REGISTER = "register"
 OTP_PURPOSE_RESET = "password_reset"
@@ -45,11 +47,20 @@ def _pending_register_key(phone: str) -> str:
 def _pending_reset_key(phone: str) -> str:
     return f"pending_reset:{phone}"
 
+def _phone_variants(raw_phone: str) -> list:
+    phone = normalize_phone(raw_phone or "")
+    base = phone.lstrip("+")
+    variants = {phone, base, f"+{base}" if base else ""}
+    return [v for v in variants if v]
+
 def _get_linked_chat_id(phone: str) -> str:
     user = User.objects.filter(username=phone).only("id").first()
     if not user:
-        cached = cache.get(_tg_link_key(phone))
-        return cached or ""
+        for variant in _phone_variants(phone):
+            cached = cache.get(_tg_link_key(variant))
+            if cached:
+                return cached
+        return ""
     profile = TelegramProfile.objects.filter(user=user, is_verified=True).only("chat_id").first()
     return profile.chat_id if profile else ""
 
@@ -59,17 +70,20 @@ def _tg_link_key(phone: str) -> str:
 def _cache_chat_link(phone: str, chat_id: str) -> None:
     if not phone or not chat_id:
         return
-    cache.set(_tg_link_key(phone), str(chat_id), timeout=settings.TELEGRAM_LINK_TTL_SECONDS)
+    for variant in _phone_variants(phone):
+        cache.set(_tg_link_key(variant), str(chat_id), timeout=settings.TELEGRAM_LINK_TTL_SECONDS)
 
 def _cache_pending_register(phone: str) -> None:
     if not phone:
         return
-    cache.set(_pending_register_key(phone), True, timeout=settings.TELEGRAM_LINK_TTL_SECONDS)
+    for variant in _phone_variants(phone):
+        cache.set(_pending_register_key(variant), phone, timeout=settings.TELEGRAM_LINK_TTL_SECONDS)
 
 def _cache_pending_reset(phone: str) -> None:
     if not phone:
         return
-    cache.set(_pending_reset_key(phone), True, timeout=settings.TELEGRAM_LINK_TTL_SECONDS)
+    for variant in _phone_variants(phone):
+        cache.set(_pending_reset_key(variant), phone, timeout=settings.TELEGRAM_LINK_TTL_SECONDS)
 
 
 def _send_otp_code(phone: str, chat_id: str, purpose: str) -> None:
@@ -79,6 +93,7 @@ def _send_otp_code(phone: str, chat_id: str, purpose: str) -> None:
         {"code": code, "attempts": 0, "chat_id": str(chat_id)},
         timeout=settings.OTP_TTL_SECONDS,
     )
+    logger.info("OTP queued: purpose=%s phone=%s chat_id=%s", purpose, phone, str(chat_id))
     send_otp(str(chat_id), code, purpose, settings.OTP_TTL_SECONDS)
 
 
@@ -194,38 +209,66 @@ def register_verify(request):
     pending = request.session.get("pending_register")
     if not pending:
         return redirect("register")
+    phone = pending["phone"]
+    phone_clean = normalize_phone(phone)
+    start_command = f"/start {phone_clean}".strip()
+    chat_id = _get_linked_chat_id(phone)
+    if chat_id and not pending.get("chat_id"):
+        pending["chat_id"] = str(chat_id)
+        request.session["pending_register"] = pending
+    needs_link = not bool(chat_id)
+    if needs_link and settings.TELEGRAM_SEND_OTP:
+        _cache_pending_register(phone)
+        logger.info("OTP pending register cached for phone=%s", phone)
+    if chat_id and settings.TELEGRAM_SEND_OTP and not cache.get(_otp_key(phone, OTP_PURPOSE_REGISTER)):
+        _send_otp_code(phone, chat_id, OTP_PURPOSE_REGISTER)
     form = TelegramOtpForm(request.POST or None)
-    if request.method == "POST" and form.is_valid():
-        ok, error = _verify_otp(pending["phone"], OTP_PURPOSE_REGISTER, form.cleaned_data["code"])
-        if not ok:
-            form.add_error("code", error)
-        elif User.objects.filter(username=pending["phone"]).exists():
-            form.add_error(None, "Bu telefon raqam bilan akkaunt mavjud.")
-        else:
-            chat_id = pending.get("chat_id")
-            if chat_id and TelegramProfile.objects.filter(chat_id=str(chat_id)).exists():
-                form.add_error(None, "Bu chat id boshqa akkauntga bog'langan.")
-                return render(request, "register_verify.html", {"form": form, "phone": pending["phone"]})
-            user = User.objects.create_user(
-                username=pending["phone"],
-                password=pending["password"],
-                first_name=pending.get("full_name", ""),
-            )
-            if chat_id:
-                TelegramProfile.objects.update_or_create(
-                    user=user,
-                    defaults={"chat_id": str(chat_id), "is_verified": True},
+    if request.method == "POST":
+        if needs_link:
+            form.add_error(None, "Telegram bog'lanmagan. Avval /start yuboring.")
+        elif form.is_valid():
+            ok, error = _verify_otp(pending["phone"], OTP_PURPOSE_REGISTER, form.cleaned_data["code"])
+            if not ok:
+                form.add_error("code", error)
+            elif User.objects.filter(username=pending["phone"]).exists():
+                form.add_error(None, "Bu telefon raqam bilan akkaunt mavjud.")
+            else:
+                chat_id = pending.get("chat_id")
+                if chat_id and TelegramProfile.objects.filter(chat_id=str(chat_id)).exists():
+                    form.add_error(None, "Bu chat id boshqa akkauntga bog'langan.")
+                    return render(
+                        request,
+                        "register_verify.html",
+                        {
+                            "form": form,
+                            "phone": phone,
+                            "phone_clean": phone_clean,
+                            "start_command": start_command,
+                            "needs_link": needs_link,
+                            "telegram_bot_username": settings.TELEGRAM_BOT_USERNAME,
+                        },
+                    )
+                user = User.objects.create_user(
+                    username=pending["phone"],
+                    password=pending["password"],
+                    first_name=pending.get("full_name", ""),
                 )
-            request.session.pop("pending_register", None)
-            auth_login(request, user)
-            return redirect("profile")
-    needs_link = bool(request.session.get("pending_register_needs_link"))
+                if chat_id:
+                    TelegramProfile.objects.update_or_create(
+                        user=user,
+                        defaults={"chat_id": str(chat_id), "is_verified": True},
+                    )
+                request.session.pop("pending_register", None)
+                auth_login(request, user)
+                return redirect("profile")
     return render(
         request,
         "register_verify.html",
         {
             "form": form,
-            "phone": pending["phone"],
+            "phone": phone,
+            "phone_clean": phone_clean,
+            "start_command": start_command,
             "needs_link": needs_link,
             "telegram_bot_username": settings.TELEGRAM_BOT_USERNAME,
         },
@@ -275,33 +318,50 @@ def password_reset_confirm(request):
     pending = request.session.get("pending_password_reset")
     if not pending:
         return redirect("password_reset_request")
+    phone = pending["phone"]
+    phone_clean = normalize_phone(phone)
+    start_command = f"/start {phone_clean}".strip()
+    chat_id = _get_linked_chat_id(phone)
+    if chat_id and not pending.get("chat_id"):
+        pending["chat_id"] = str(chat_id)
+        request.session["pending_password_reset"] = pending
+    needs_link = not bool(chat_id)
+    if needs_link and settings.TELEGRAM_SEND_OTP:
+        _cache_pending_reset(phone)
+        logger.info("OTP pending reset cached for phone=%s", phone)
+    if chat_id and settings.TELEGRAM_SEND_OTP and not cache.get(_otp_key(phone, OTP_PURPOSE_RESET)):
+        _send_otp_code(phone, chat_id, OTP_PURPOSE_RESET)
     form = PasswordResetConfirmForm(request.POST or None)
-    if request.method == "POST" and form.is_valid():
-        ok, error = _verify_otp(pending["phone"], OTP_PURPOSE_RESET, form.cleaned_data["code"])
-        if not ok:
-            form.add_error("code", error)
-        else:
-            user = User.objects.filter(id=pending["user_id"]).first()
-            if not user:
-                form.add_error(None, "Foydalanuvchi topilmadi.")
+    if request.method == "POST":
+        if needs_link:
+            form.add_error(None, "Telegram bog'lanmagan. Avval /start yuboring.")
+        elif form.is_valid():
+            ok, error = _verify_otp(pending["phone"], OTP_PURPOSE_RESET, form.cleaned_data["code"])
+            if not ok:
+                form.add_error("code", error)
             else:
-                user.set_password(form.cleaned_data["password1"])
-                user.save(update_fields=["password"])
-                chat_id = pending.get("chat_id")
-                if chat_id:
-                    TelegramProfile.objects.update_or_create(
-                        user=user,
-                        defaults={"chat_id": str(chat_id), "is_verified": True},
-                    )
-                request.session.pop("pending_password_reset", None)
-                return redirect("login")
-    needs_link = bool(request.session.get("pending_reset_needs_link"))
+                user = User.objects.filter(id=pending["user_id"]).first()
+                if not user:
+                    form.add_error(None, "Foydalanuvchi topilmadi.")
+                else:
+                    user.set_password(form.cleaned_data["password1"])
+                    user.save(update_fields=["password"])
+                    chat_id = pending.get("chat_id")
+                    if chat_id:
+                        TelegramProfile.objects.update_or_create(
+                            user=user,
+                            defaults={"chat_id": str(chat_id), "is_verified": True},
+                        )
+                    request.session.pop("pending_password_reset", None)
+                    return redirect("login")
     return render(
         request,
         "password_reset_confirm.html",
         {
             "form": form,
-            "phone": pending["phone"],
+            "phone": phone,
+            "phone_clean": phone_clean,
+            "start_command": start_command,
             "needs_link": needs_link,
             "telegram_bot_username": settings.TELEGRAM_BOT_USERNAME,
         },
@@ -441,6 +501,14 @@ def telegram_webhook(request, token: str):
         parts = text.split(maxsplit=1)
         phone_raw = parts[1] if len(parts) > 1 else ""
         phone = normalize_phone(phone_raw)
+        variants = _phone_variants(phone_raw)
+        logger.info(
+            "Telegram /start received: chat_id=%s phone_raw=%s phone=%s variants=%s",
+            chat_id,
+            phone_raw,
+            phone,
+            variants,
+        )
         if len(phone) < 7:
             send_bot_message(str(chat_id), "Telefon raqamni yuboring: /start +998901234567")
             return JsonResponse({"ok": True})
@@ -450,7 +518,7 @@ def telegram_webhook(request, token: str):
             send_bot_message(str(chat_id), "Bu chat id boshqa akkauntga bog'langan.")
             return JsonResponse({"ok": True})
 
-        user = User.objects.filter(username=phone).first()
+        user = User.objects.filter(username__in=variants).first()
         if user:
             TelegramProfile.objects.update_or_create(
                 user=user,
@@ -462,10 +530,22 @@ def telegram_webhook(request, token: str):
             send_bot_message(str(chat_id), "Bog'lash saqlandi. Endi saytda ro'yxatdan o'ting.")
 
         if settings.TELEGRAM_SEND_OTP:
-            if cache.get(_pending_register_key(phone)):
-                _send_otp_code(phone, str(chat_id), OTP_PURPOSE_REGISTER)
-            if user and cache.get(_pending_reset_key(phone)):
-                _send_otp_code(phone, str(chat_id), OTP_PURPOSE_RESET)
+            logger.info("OTP send enabled, checking pending flags for phone=%s", phone)
+            for variant in variants:
+                pending_phone = cache.get(_pending_register_key(variant))
+                if pending_phone:
+                    logger.info("OTP pending register found for variant=%s phone=%s", variant, pending_phone)
+                    _send_otp_code(pending_phone, str(chat_id), OTP_PURPOSE_REGISTER)
+                    send_bot_message(str(chat_id), "Tasdiqlash kodi yuborildi.")
+                    break
+            if user:
+                for variant in variants:
+                    pending_phone = cache.get(_pending_reset_key(variant))
+                    if pending_phone:
+                        logger.info("OTP pending reset found for variant=%s phone=%s", variant, pending_phone)
+                        _send_otp_code(pending_phone, str(chat_id), OTP_PURPOSE_RESET)
+                        send_bot_message(str(chat_id), "Parol tiklash kodi yuborildi.")
+                        break
     else:
         send_bot_message(str(chat_id), "Bot faqat /start <telefon> formatini qabul qiladi.")
 
