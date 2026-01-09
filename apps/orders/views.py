@@ -8,7 +8,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.urls import reverse
 from django.views.decorators.http import require_POST
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.utils.dateparse import parse_time
 from django.db import transaction
 
@@ -144,6 +144,100 @@ def order_confirmation(request):
     order_id = request.session.get("last_order_id")
     order = Order.objects.filter(id=order_id).first()
     return render(request, "order_confirmation.html", {"order": order})
+
+
+def _cart_json_payload(request, cart):
+    items = []
+    for item in cart.items():
+        book = item["book"]
+        cover = book.cover_image.url if book.cover_image else ""
+        if cover:
+            cover = request.build_absolute_uri(cover)
+        items.append(
+            {
+                "book_id": book.id,
+                "title": book.title,
+                "cover": cover,
+                "price": str(item["price"]),
+                "quantity": item["quantity"],
+                "line_total": str(item["line_total"]),
+            }
+        )
+    return {
+        "items": items,
+        "total_price": str(cart.total_price()),
+        "count": len(cart),
+    }
+
+
+def _read_json(request):
+    try:
+        return json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return None
+
+
+@ensure_csrf_cookie
+def api_cart(request):
+    cart = Cart(request)
+    return JsonResponse(_cart_json_payload(request, cart))
+
+
+@require_POST
+def api_cart_add(request):
+    payload = _read_json(request)
+    if payload is None:
+        return JsonResponse({"error": "invalid_json"}, status=400)
+    try:
+        book_id = int(payload.get("book_id"))
+        quantity = int(payload.get("quantity", 1))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "invalid_payload"}, status=400)
+    if book_id <= 0 or quantity <= 0:
+        return JsonResponse({"error": "invalid_payload"}, status=400)
+    cart = Cart(request)
+    cart.add(book_id, quantity)
+    return JsonResponse(_cart_json_payload(request, cart))
+
+
+@require_POST
+def api_cart_update(request):
+    payload = _read_json(request)
+    if payload is None:
+        return JsonResponse({"error": "invalid_json"}, status=400)
+    try:
+        book_id = int(payload.get("book_id"))
+        quantity = int(payload.get("quantity", 1))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "invalid_payload"}, status=400)
+    if book_id <= 0:
+        return JsonResponse({"error": "invalid_payload"}, status=400)
+    cart = Cart(request)
+    cart.update(book_id, quantity)
+    return JsonResponse(_cart_json_payload(request, cart))
+
+
+@require_POST
+def api_cart_remove(request):
+    payload = _read_json(request)
+    if payload is None:
+        return JsonResponse({"error": "invalid_json"}, status=400)
+    try:
+        book_id = int(payload.get("book_id"))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "invalid_payload"}, status=400)
+    if book_id <= 0:
+        return JsonResponse({"error": "invalid_payload"}, status=400)
+    cart = Cart(request)
+    cart.remove(book_id)
+    return JsonResponse(_cart_json_payload(request, cart))
+
+
+@require_POST
+def api_cart_clear(request):
+    cart = Cart(request)
+    cart.clear()
+    return JsonResponse(_cart_json_payload(request, cart))
 
 
 @require_POST
