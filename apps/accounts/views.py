@@ -10,7 +10,7 @@ import logging
 
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 
@@ -117,6 +117,21 @@ def _verify_otp(phone: str, purpose: str, code: str) -> tuple:
     return True, ""
 
 
+def _telegram_payload(phone: str, needs_link: bool) -> dict:
+    phone_clean = normalize_phone(phone)
+    start_command = f"/start {phone_clean}".strip()
+    bot_username = settings.TELEGRAM_BOT_USERNAME or ""
+    bot_url = f"https://t.me/{bot_username}" if bot_username else ""
+    return {
+        "phone": phone,
+        "phone_clean": phone_clean,
+        "start_command": start_command,
+        "needs_link": needs_link,
+        "bot_username": bot_username,
+        "bot_url": bot_url,
+    }
+
+
 def _build_profile_context(request, form=None, library_q=None):
     phone = (request.user.username or "").strip()
     orders = []
@@ -205,6 +220,36 @@ def register(request):
     return render(request, "register.html", {"form": form, "telegram_bot_username": settings.TELEGRAM_BOT_USERNAME})
 
 
+@require_POST
+def register_json(request):
+    if request.user.is_authenticated:
+        return JsonResponse({"ok": True, "status": "already_authenticated"})
+    form = PhoneUserCreationForm(request.POST)
+    if not form.is_valid():
+        return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+
+    phone = form.cleaned_data.get("phone")
+    if settings.TELEGRAM_SEND_OTP:
+        chat_id = _get_linked_chat_id(phone)
+        request.session["pending_register"] = {
+            "full_name": form.cleaned_data.get("full_name", "").strip(),
+            "phone": phone,
+            "password": form.cleaned_data.get("password1"),
+            "chat_id": str(chat_id) if chat_id else "",
+        }
+        request.session["pending_register_needs_link"] = not bool(chat_id)
+        if chat_id:
+            _send_otp_code(phone, chat_id, OTP_PURPOSE_REGISTER)
+        else:
+            _cache_pending_register(phone)
+        payload = _telegram_payload(phone, not bool(chat_id))
+        return JsonResponse({"ok": True, "status": "otp_required", **payload})
+
+    user = form.save()
+    auth_login(request, user)
+    return JsonResponse({"ok": True, "status": "registered"})
+
+
 def register_verify(request):
     pending = request.session.get("pending_register")
     if not pending:
@@ -275,6 +320,69 @@ def register_verify(request):
     )
 
 
+@require_http_methods(["GET", "POST"])
+def register_verify_json(request):
+    pending = request.session.get("pending_register")
+    if not pending:
+        return JsonResponse({"ok": False, "error": "no_pending"}, status=400)
+
+    phone = pending["phone"]
+    chat_id = _get_linked_chat_id(phone)
+    if chat_id and not pending.get("chat_id"):
+        pending["chat_id"] = str(chat_id)
+        request.session["pending_register"] = pending
+    needs_link = not bool(chat_id)
+    if needs_link and settings.TELEGRAM_SEND_OTP:
+        _cache_pending_register(phone)
+    otp_sent = False
+    if chat_id and settings.TELEGRAM_SEND_OTP and not cache.get(_otp_key(phone, OTP_PURPOSE_REGISTER)):
+        _send_otp_code(phone, chat_id, OTP_PURPOSE_REGISTER)
+        otp_sent = True
+    elif cache.get(_otp_key(phone, OTP_PURPOSE_REGISTER)):
+        otp_sent = True
+
+    payload = _telegram_payload(phone, needs_link)
+    if request.method == "GET":
+        return JsonResponse({"ok": True, "status": "pending", "otp_sent": otp_sent, **payload})
+
+    if needs_link:
+        return JsonResponse(
+            {"ok": False, "error": "telegram_not_linked", **payload},
+            status=400,
+        )
+
+    form = TelegramOtpForm(request.POST)
+    if not form.is_valid():
+        return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+
+    ok, error = _verify_otp(phone, OTP_PURPOSE_REGISTER, form.cleaned_data["code"])
+    if not ok:
+        return JsonResponse(
+            {"ok": False, "error": "invalid_code", "message": error},
+            status=400,
+        )
+    if User.objects.filter(username=phone).exists():
+        return JsonResponse({"ok": False, "error": "user_exists"}, status=400)
+
+    chat_id = pending.get("chat_id")
+    if chat_id and TelegramProfile.objects.filter(chat_id=str(chat_id)).exists():
+        return JsonResponse({"ok": False, "error": "chat_id_in_use"}, status=400)
+
+    user = User.objects.create_user(
+        username=phone,
+        password=pending["password"],
+        first_name=pending.get("full_name", ""),
+    )
+    if chat_id:
+        TelegramProfile.objects.update_or_create(
+            user=user,
+            defaults={"chat_id": str(chat_id), "is_verified": True},
+        )
+    request.session.pop("pending_register", None)
+    auth_login(request, user)
+    return JsonResponse({"ok": True, "status": "verified"})
+
+
 def login_view(request):
     if request.user.is_authenticated:
         return redirect("profile")
@@ -312,6 +420,33 @@ def password_reset_request(request):
                 _cache_pending_reset(phone)
             return redirect("password_reset_confirm")
     return render(request, "password_reset_request.html", {"form": form})
+
+
+@require_POST
+def password_reset_request_json(request):
+    form = PasswordResetRequestForm(request.POST)
+    if not form.is_valid():
+        return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+    phone = form.cleaned_data["phone"]
+    user = User.objects.filter(username=phone).first()
+    if not user:
+        return JsonResponse({"ok": False, "error": "user_not_found"}, status=400)
+    if not settings.TELEGRAM_SEND_OTP:
+        return JsonResponse({"ok": False, "error": "telegram_disabled"}, status=400)
+
+    chat_id = _get_linked_chat_id(phone)
+    request.session["pending_password_reset"] = {
+        "user_id": user.id,
+        "phone": phone,
+        "chat_id": str(chat_id) if chat_id else "",
+    }
+    request.session["pending_reset_needs_link"] = not bool(chat_id)
+    if chat_id:
+        _send_otp_code(phone, chat_id, OTP_PURPOSE_RESET)
+    else:
+        _cache_pending_reset(phone)
+    payload = _telegram_payload(phone, not bool(chat_id))
+    return JsonResponse({"ok": True, "status": "otp_required", **payload})
 
 
 def password_reset_confirm(request):
@@ -366,6 +501,64 @@ def password_reset_confirm(request):
             "telegram_bot_username": settings.TELEGRAM_BOT_USERNAME,
         },
     )
+
+
+@require_http_methods(["GET", "POST"])
+def password_reset_confirm_json(request):
+    pending = request.session.get("pending_password_reset")
+    if not pending:
+        return JsonResponse({"ok": False, "error": "no_pending"}, status=400)
+
+    phone = pending["phone"]
+    chat_id = _get_linked_chat_id(phone)
+    if chat_id and not pending.get("chat_id"):
+        pending["chat_id"] = str(chat_id)
+        request.session["pending_password_reset"] = pending
+    needs_link = not bool(chat_id)
+    if needs_link and settings.TELEGRAM_SEND_OTP:
+        _cache_pending_reset(phone)
+    otp_sent = False
+    if chat_id and settings.TELEGRAM_SEND_OTP and not cache.get(_otp_key(phone, OTP_PURPOSE_RESET)):
+        _send_otp_code(phone, chat_id, OTP_PURPOSE_RESET)
+        otp_sent = True
+    elif cache.get(_otp_key(phone, OTP_PURPOSE_RESET)):
+        otp_sent = True
+
+    payload = _telegram_payload(phone, needs_link)
+    if request.method == "GET":
+        return JsonResponse({"ok": True, "status": "pending", "otp_sent": otp_sent, **payload})
+
+    if needs_link:
+        return JsonResponse(
+            {"ok": False, "error": "telegram_not_linked", **payload},
+            status=400,
+        )
+
+    form = PasswordResetConfirmForm(request.POST)
+    if not form.is_valid():
+        return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+
+    ok, error = _verify_otp(phone, OTP_PURPOSE_RESET, form.cleaned_data["code"])
+    if not ok:
+        return JsonResponse(
+            {"ok": False, "error": "invalid_code", "message": error},
+            status=400,
+        )
+
+    user = User.objects.filter(id=pending["user_id"]).first()
+    if not user:
+        return JsonResponse({"ok": False, "error": "user_not_found"}, status=400)
+
+    user.set_password(form.cleaned_data["password1"])
+    user.save(update_fields=["password"])
+    chat_id = pending.get("chat_id")
+    if chat_id:
+        TelegramProfile.objects.update_or_create(
+            user=user,
+            defaults={"chat_id": str(chat_id), "is_verified": True},
+        )
+    request.session.pop("pending_password_reset", None)
+    return JsonResponse({"ok": True, "status": "verified"})
 
 
 def logout_view(request):
